@@ -67,7 +67,7 @@ h1,h2,h3{font-family:var(--font-display);font-weight:600;margin:0;letter-spacing
 @media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}}
 .stage{padding:8px;position:relative}
 @media (min-width:901px){.stage{position:sticky;top:12px}}
-#cv{display:block;width:100%;height:auto;image-rendering:pixelated;image-rendering:crisp-edges;cursor:default;background:#0b151d}
+#cv{display:block;width:100%;height:auto;cursor:default;background:#4d8a3b}
 .stage-foot{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--ink-dim);padding:8px 4px 0}
 .dot{display:inline-block;width:9px;height:9px;margin-right:5px;vertical-align:-1px;border:1px solid #000}
 .hint{position:absolute;left:50%;top:16px;transform:translateX(-50%);background:var(--gold);color:#2a1e00;
@@ -126,6 +126,22 @@ textarea.draft{border-color:var(--ai);min-height:150px}
 .quick .chip{font-family:var(--font-body);font-size:12px}
 .note{font-size:12px;color:var(--ink-dim)}
 .err{background:#4a1d17;border:2px solid var(--red);padding:8px;font-size:13px}
+.pill.on{background:var(--mint);color:#06281a;box-shadow:inset 2px 2px 0 #a6efc4, inset -2px -2px 0 #2f8a58}
+.pill.off{background:var(--amber);color:#2a1700;box-shadow:inset 2px 2px 0 #ffd08a, inset -2px -2px 0 #a86a1a}
+.needs{padding:8px 10px;font-size:13px}
+.needs b{font-family:var(--font-display);font-weight:400;color:var(--gold);letter-spacing:.04em;font-size:12px;text-transform:uppercase}
+.needs ul{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:3px}
+.needs li{display:flex;gap:6px;color:var(--ink-dim)} .needs li.met{color:var(--mint)} .needs .mk{width:12px;flex:none}
+.needs small{color:var(--ink-dim);font-size:11px}
+.msg.doc{align-self:flex-end;background:#fffdf3;color:#1d1a12;border-style:solid;max-width:92%;box-shadow:3px 3px 0 rgba(0,0,0,.35)}
+.msg.doc .doctitle{font-weight:700;margin-bottom:4px}
+.msg.doc pre{margin:0;white-space:pre-wrap;font:13px/1.45 var(--font-body)}
+.verdict{align-self:flex-start;font-size:12px;color:var(--ink-dim);font-style:italic;margin-top:-4px;padding-left:4px}
+.ainote{font-size:13px;padding:8px 10px;border:2px dashed var(--ai);color:var(--ink)}
+.ainote b{color:var(--ai);font-family:var(--font-display);font-weight:400;margin-right:6px}
+.doced{display:flex;flex-direction:column;gap:6px;padding:8px}
+.doced select{width:auto}
+.doced textarea{min-height:110px;font-family:var(--font-body)}
 .summary{padding:12px;text-align:center}
 .summary .big{font-family:var(--font-display);font-size:24px;margin-bottom:4px}
 
@@ -162,6 +178,7 @@ input[type=password],input[type=text],select{background:#0e1b25;border:2px solid
   <div class="clock well" id="clock">08:00</div>
   <div class="stats" id="stats"></div>
   <div class="top-actions">
+    <button class="btn small pill off" id="modePill" type="button" title="Change in Settings">AI: offline demo</button>
     <button class="btn ghost small" id="pauseBtn" type="button">Pause</button>
     <button class="btn ghost small" id="settingsBtn" type="button">Settings</button>
   </div>
@@ -169,7 +186,7 @@ input[type=password],input[type=text],select{background:#0e1b25;border:2px solid
 
 <main class="layout">
   <section class="panel stage">
-    <canvas id="cv" width="480" height="300" aria-label="Isometric view of the clinic. Click a waiting patient to select them."></canvas>
+    <canvas id="cv" width="1080" height="660" aria-label="Isometric view of the clinic. Click a waiting patient to select them."></canvas>
     <div class="hint" id="hint" hidden></div>
     <div class="stage-foot">
       <span><i class="dot" style="background:#4f7a96"></i>Routine</span>
@@ -216,9 +233,16 @@ input[type=password],input[type=text],select{background:#0e1b25;border:2px solid
         </select>
       </label>
       <button class="btn small" type="button" id="loadModels">Load my models</button>
+      <button class="btn small ai" type="button" id="testKey">Test key</button>
     </div>
     <div class="keystate note" id="keyState">No key: the game runs with scripted offline patients so you can try it out.</div>
     <label class="check"><input type="checkbox" id="review" checked> Let me review AI drafts before they're sent</label>
+    <label for="lang">Language for patients and the AI assistant
+      <select id="lang">
+        <option value="en" selected>English</option>
+        <option value="ro">Română</option>
+      </select>
+    </label>
     <label for="pace">Patient arrivals
       <select id="pace">
         <option value="calm">Calm (about one a minute)</option>
@@ -236,7 +260,7 @@ input[type=password],input[type=text],select{background:#0e1b25;border:2px solid
 <script>
 "use strict";
 /* ================= Config ================= */
-const cfg = { key:"", model:"gemini-3.6-flash", review:true, pace:"normal" };
+const cfg = { key:"", model:"gemini-3.6-flash", review:true, pace:"normal", lang:"en" };
 const PACE = { calm:60, normal:35, busy:20 };
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -263,7 +287,7 @@ const SCENARIOS = [
   follow:"So can I actually get the note today? It's last Monday to this Tuesday. Also I've still got a bit of a cough, is that normal?",
   thanks:"Brilliant, that's sorted then. Cheers.",
   draft:"Hi Tom, sorry you've been unwell. I can write a fit note covering the days you were off; just confirm the exact dates for me. A cough can linger for two to three weeks after flu and that's usually normal. If it lasts beyond three weeks, you get breathless or chest pain, or you cough up blood, come back and we'll examine you."},
- {name:"Elena Popa",age:29,sex:"F",role:"GP",urgency:"soon",
+ {name:"Elena Popa",age:29,sex:"F",child:true,role:"GP",urgency:"soon",
   opening:"My son Luca is 3 and he's had a fever since yesterday, 38.5. He's eating less. Should I be worried?",
   record:"Child: Luca Popa, 3 years, 14 kg. Vaccinations up to date. No previous hospital admissions.",
   hidden:"Luca is drinking well, has normal wet nappies, plays between fevers, has a runny nose, no rash and no breathing trouble. You gave paracetamol once last night. You're tired and anxious.",
@@ -365,229 +389,505 @@ const SCENARIOS = [
   draft:"Hi Carmen, thank you for telling me, stomach upset is a really common side effect of metformin. Please don't stop it on your own, as your sugars are already rising. First, take it with or just after meals, never on an empty stomach. We can also switch you to a slow-release version, which is much gentler. If it still doesn't suit you, there are other medicines we can consider. Let's review your sugars and recheck your HbA1c in 3 months."}
 ];
 
+/* ================= Per-patient needs, Romanian text, offline documents ================= */
+// Each need is judged by the patient AI. "req" needs must all be met for the patient to leave satisfied.
+const EXTRA = {
+ "Maria Ionescu": { ro:{ opening:"Bună ziua, maică. Mi s-au terminat pastilele de tensiune. Mi le puteți reînnoi? Îmi trebuie până în weekend.", record:"HTA. Amlodipină 5 mg o dată pe zi. Ultima măsurare TA acum 11 luni: 142/88." },
+   needs:[ {id:"rx", req:true, en:"Her amlodipine prescription is renewed", ro:"Rețeta de amlodipină este reînnoită", kw:["prescri","renew","amlodipin","rețet","reteta","reînno"]},
+           {id:"bp", req:true, en:"The overdue blood pressure check is done or booked", ro:"Controlul tensiunii (restant) este făcut sau programat", kw:["blood pressure","measure","tensiun","măsur","masur"]},
+           {id:"dizzy", req:false, en:"Her dizziness on standing is taken seriously", ro:"Amețeala la ridicare este luată în serios", kw:["dizz","ameț","amet"]} ],
+   doc:{type:"prescription", title:"Prescription", body:"Amlodipine 5 mg tablets\nSig: 1 tablet by mouth once daily\nQuantity: 28 tablets (28 days)\nRepeats: 2\nPrescriber: [GP signature]"} },
+ "Tom Harris": { ro:{ opening:"Am stat acasă toată săptămâna trecută cu gripă. Șeful vrea o adeverință de la medic pentru zilele lipsă.", record:"Sănătos. Nicio adeverință medicală emisă anul acesta." },
+   needs:[ {id:"note", req:true, en:"A sick note covering his exact dates is issued", ro:"Primește certificat/adeverință pentru zilele exacte", kw:["note","certif","adeverin","concediu"]},
+           {id:"cough", req:false, en:"The lingering cough is explained", ro:"I se explică tusea care persistă", kw:["cough","tuse"]} ],
+   doc:{type:"sick_note", title:"Fit note", body:"Patient: Tom Harris\nCondition: Influenza-like illness\nNot fit for work from: [first day off] to: [last day off]\nNow fit to return: yes\nClinician: [GP signature]"} },
+ "Elena Popa": { ro:{ opening:"Băiețelul meu, Luca, are 3 ani și are febră de ieri, 38,5. Mănâncă mai puțin. Ar trebui să mă îngrijorez?", record:"Copil: Luca Popa, 3 ani, 14 kg. Vaccinări la zi. Fără internări anterioare." },
+   needs:[ {id:"home", req:true, en:"Clear advice on managing the fever at home", ro:"Sfaturi clare pentru febra acasă", kw:["paracetamol","ibuprofen","fluid","drink","lichid","hidrat"]},
+           {id:"flags", req:true, en:"Which warning signs mean urgent help", ro:"Ce semne de alarmă impun ajutor urgent", kw:["rash","erupți","erupti","breath","respir","drows","somnolen","urgent","112"]},
+           {id:"seen", req:false, en:"An offer to examine Luca", ro:"I se oferă examinarea lui Luca", kw:["examine","examin","see him","consult"]} ],
+   doc:{type:"patient_leaflet", title:"Fever in young children: what to do", body:"• Give plenty of fluids; offer small, frequent drinks\n• Children's paracetamol or ibuprofen: dose as on the label for 14 kg\n• Call 112 / come in urgently if: hard to wake, fast or difficult breathing, a rash that doesn't fade under a glass, no wet nappy for 12 hours, or fever over 5 days"} },
+ "George Miller": { ro:{ opening:"Am primit un mesaj că mi-au ieșit analizele și am colesterolul 6,8. E grav? Trebuie să iau pastile?", record:"Colesterol total 6,8 mmol/L, LDL 4,6, HDL 1,0. TA 138/86. IMC 29." },
+   needs:[ {id:"meaning", req:true, en:"What 6.8 means for his overall heart risk", ro:"Ce înseamnă 6,8 pentru riscul lui cardiovascular", kw:["risk","risc"]},
+           {id:"plan", req:true, en:"His options: lifestyle and/or a statin, with a next step", ro:"Opțiunile: stil de viață și/sau statină, cu un pas următor", kw:["statin","diet","dietă","exercise","mișcare","miscare","lifestyle"]},
+           {id:"asked", req:false, en:"Being asked about smoking or family history", ro:"Este întrebat despre fumat sau istoric familial", kw:["smok","fum","family","famil"]} ],
+   doc:{type:"test_order", title:"10-year cardiovascular risk review", body:"Book: nurse appointment for BP, weight, HbA1c\nCalculate: 10-year CV risk (SCORE2)\nReview with GP in 2 weeks to discuss statin vs lifestyle"} },
+ "Ana Dumitru": { ro:{ opening:"Aș vrea vaccinul antigripal. Pot face și rapelul COVID în aceeași zi, sau e prea mult?", record:"Astm ușor, salbutamol la nevoie. Fără reacții la vaccinuri înregistrate." },
+   needs:[ {id:"both", req:true, en:"Whether both vaccines can be given at the same visit", ro:"Dacă se pot face ambele vaccinuri la aceeași vizită", kw:["both","same","ambele","aceeași","aceeasi"]},
+           {id:"side", req:true, en:"Reassurance about side effects such as a sore arm", ro:"Liniștire legată de efecte adverse (braț dureros)", kw:["arm","braț","brat","side effect","efect","reacți"]} ],
+   doc:{type:"other", title:"Vaccination record", body:"Influenza vaccine: left deltoid, batch [to confirm]\nCOVID-19 booster: right deltoid, batch [to confirm]\nObserved 15 min, no reaction\nGiven by: [nurse]"} },
+ "Ravi Patel": { ro:{ opening:"M-am lovit la spate acum două săptămâni ridicând niște cutii. Încă mă doare. Am nevoie de un RMN?", record:"Supervizor depozit. Fără antecedente semnificative. Ia ibuprofen fără rețetă." },
+   needs:[ {id:"scan", req:true, en:"Whether a scan is needed, and why", ro:"Dacă e nevoie de investigații imagistice și de ce", kw:["scan","rmn","mri","x-ray","radiograf","imagist"]},
+           {id:"manage", req:true, en:"How to manage it and get back to the gym", ro:"Cum să gestioneze durerea și când revine la sală", kw:["active","activ","exercis","exerciț","gym","sală","sala","physio","kineto"]},
+           {id:"flags", req:true, en:"Which symptoms would be serious", ro:"Ce simptome ar fi grave", kw:["numb","amorț","amort","bladder","vezic","bowel","urgent"]} ],
+   doc:{type:"referral", title:"Physiotherapy referral", body:"Reason: mechanical low back pain, 2 weeks, no red flags\nRequest: assessment and graded exercise programme\nUrgency: routine"} },
+ "Sophie Clark": { ro:{ opening:"Nu pot să dorm și sunt anxioasă tot timpul, se apropie examenele. Îmi puteți da ceva să dorm?", record:"Studentă la master. Fără antecedente psihiatrice înregistrate." },
+   needs:[ {id:"listened", req:true, en:"Being asked how she feels and how her mood is", ro:"Este întrebată cum se simte și cum îi este dispoziția", kw:["mood","feel","dispoziț","dispozit","cum vă simți"]},
+           {id:"practical", req:true, en:"Practical help with sleep and caffeine", ro:"Ajutor practic pentru somn și cafeină", kw:["caffeine","coffee","cafea","cofein","sleep","somn","routine","rutin"]},
+           {id:"support", req:true, en:"Talking therapy or a follow-up plan", ro:"Psihoterapie sau un plan de reevaluare", kw:["therapy","terap","counsel","psiholog","follow","review","reevalu","revin"]} ],
+   doc:{type:"referral", title:"Talking therapy referral", body:"Reason: anxiety and insomnia related to exam stress\nRisk: no thoughts of self-harm reported [confirm]\nRequest: CBT / CBT-I\nFollow-up with GP: 2 weeks"} },
+ "Ion Vasilescu": { ro:{ opening:"Trebuie să-mi schimb pansamentul. Mi-au scos o umflătură de pe spate săptămâna trecută și e puțin roșu în jur.", record:"Excizie chist sebaceu, spate, acum 8 zile. Diabet zaharat tip 2. Firele se scot la 10-14 zile." },
+   needs:[ {id:"dressing", req:true, en:"The wound is checked and the dressing changed", ro:"Plaga este verificată și pansamentul schimbat", kw:["dressing","pansament","wound","plag"]},
+           {id:"infection", req:true, en:"Which signs of infection to watch for", ro:"Ce semne de infecție să urmărească", kw:["infect","pus","puroi","fever","febr","spread","extind"]},
+           {id:"stitches", req:false, en:"When the stitches come out", ro:"Când se scot firele", kw:["stitch","suture","fire","sutur"]} ],
+   doc:{type:"other", title:"Wound care note", body:"Wound: upper back, day 8 post excision\nFindings: 1 cm erythema, no discharge, afebrile\nAction: cleaned, dry dressing applied, erythema margin marked\nPlan: suture removal day 11-12; return same day if spreading, pus or fever"} },
+ "Laura Chen": { ro:{ opening:"Am o eczemă care mă mănâncă pe ambele brațe de când am schimbat detergentul. Pot să folosesc doar o cremă?", record:"Eczemă în copilărie. Fără tratament curent." },
+   needs:[ {id:"trigger", req:true, en:"Advice to stop the new washing powder", ro:"Sfatul de a renunța la noul detergent", kw:["detergent","powder","stop","renunț","renunt"]},
+           {id:"cream", req:true, en:"Which cream or moisturiser to use, and how", ro:"Ce cremă/emolient să folosească și cum", kw:["emollient","emolient","moistur","hydrocort","hidrocort","cream","cremă","crema"]},
+           {id:"return", req:false, en:"When to come back", ro:"Când să revină", kw:["week","săptăm","saptam","return","revin"]} ],
+   doc:{type:"prescription", title:"Prescription", body:"Hydrocortisone 1% cream\nSig: apply thinly to affected areas twice daily for up to 7 days\nQuantity: 30 g\n\nFragrance-free emollient cream\nSig: apply liberally 3-4 times daily\nQuantity: 500 g\nPrescriber: [signature]"} },
+ "David Brown": { ro:{ opening:"Un prieten a făcut infarct luna trecută. Vreau o trimitere la cardiolog, așa, ca să fiu sigur.", record:"Fără antecedente cardiace. TA 128/80 anul trecut. Nefumător. Colesterol 5,1 acum doi ani." },
+   needs:[ {id:"concern", req:true, en:"His worry is taken seriously and he's asked about symptoms", ro:"Îngrijorarea îi este luată în serios și e întrebat de simptome", kw:["chest","piept","symptom","simptom","breath","respir","worr","îngrijor","ingrijor"]},
+           {id:"alternative", req:true, en:"A concrete heart check or a clear referral decision", ro:"Un control cardiac concret sau o decizie clară despre trimitere", kw:["ecg","ekg","check","risk","risc","analiz","cholesterol","colesterol","refer","trimit"]},
+           {id:"flags", req:false, en:"Which symptoms mean calling emergency services", ro:"Ce simptome înseamnă să sune la urgențe", kw:["112","emergency","urgen"]} ],
+   doc:{type:"test_order", title:"Heart health check", body:"Bloods: lipid profile, HbA1c, U&E\nObservations: BP, BMI\nECG: resting 12-lead\nCalculate 10-year CV risk; review results with GP"} },
+ "Mihai Stan": { ro:{ opening:"Plec în Thailanda peste 6 săptămâni. Ce vaccinuri îmi trebuie?", record:"Vaccinuri copilărie complete. Rapel tetanos în 2012. Fără vaccin hepatita A înregistrat." },
+   needs:[ {id:"vaccines", req:true, en:"Which vaccines he needs", ro:"Ce vaccinuri îi trebuie", kw:["hepatit","typhoid","tifoid","tetanus","tetanos"]},
+           {id:"timing", req:false, en:"Whether 6 weeks is enough time", ro:"Dacă 6 săptămâni sunt suficiente", kw:["weeks","săptăm","saptam","enough","suficient"]},
+           {id:"precautions", req:true, en:"Mosquito, malaria, food and water precautions", ro:"Precauții: țânțari, malarie, apă și mâncare", kw:["mosquito","țânțar","tantar","malaria","malari","water","apă","food","mânc"]} ],
+   doc:{type:"other", title:"Travel vaccination plan", body:"Hepatitis A: dose 1 today, booster 6-12 months\nTyphoid: today\nTetanus/diphtheria/polio booster: today\nConsider: rabies, Japanese encephalitis (rural stays)\nMalaria: check region-specific advice"} },
+ "Carmen Radu": { ro:{ opening:"Metforminul îmi deranjează stomacul. Pot să-l opresc? Oricum am glicemiile mari.", record:"Diabet zaharat tip 2. Metformin 1 g de două ori pe zi. HbA1c 64 mmol/mol acum 3 luni (anterior 56)." },
+   needs:[ {id:"dont_stop", req:true, en:"Clear advice not to just stop the medicine", ro:"Sfat clar să nu oprească singură tratamentul", kw:["don't stop","do not stop","nu opri","nu întrerup","nu intrerup","continu"]},
+           {id:"solution", req:true, en:"A practical fix: with food, slow-release or an alternative", ro:"O soluție practică: cu mâncare, eliberare prelungită sau alternativă", kw:["food","meal","masă","mese","slow","release","prelungit","alternativ"]},
+           {id:"review", req:false, en:"A plan to review her sugars", ro:"Un plan de reevaluare a glicemiilor", kw:["review","hba1c","control","reevalu"]} ],
+   doc:{type:"prescription", title:"Prescription", body:"Metformin 500 mg modified-release tablets\nSig: 2 tablets twice daily with meals (start 1 tablet twice daily for 1 week)\nQuantity: 112 tablets\nStop: metformin 1 g immediate-release\nPrescriber: [GP signature]"} },
+};
+for(const s of SCENARIOS) Object.assign(s, EXTRA[s.name] || {});
+const T_ = (en, ro) => cfg.lang==="ro" ? ro : en;
+const openingOf = sc => cfg.lang==="ro" && sc.ro ? sc.ro.opening : sc.opening;
+const recordOf = sc => cfg.lang==="ro" && sc.ro ? sc.ro.record : sc.record;
+const needLabel = n => cfg.lang==="ro" ? n.ro : n.en;
+const DOC_LABEL = { prescription:["Prescription","Rețetă"], sick_note:["Sick note","Certificat medical"], referral:["Referral","Bilet de trimitere"],
+  test_order:["Tests ordered","Analize / investigații"], letter:["Letter","Scrisoare medicală"], patient_leaflet:["Patient leaflet","Instrucțiuni pentru pacient"],
+  appointment:["Appointment","Programare"], other:["Document","Document"] };
+const docLabel = t => (DOC_LABEL[t] || DOC_LABEL.other)[cfg.lang==="ro"?1:0];
+
 /* ================= Gemini ================= */
 const API = "https://generativelanguage.googleapis.com/v1beta";
+const live = () => !!cfg.key;
 async function gemini(system, user, json){
   const body = {
     systemInstruction:{parts:[{text:system}]},
     contents:[{role:"user",parts:[{text:user}]}],
-    generationConfig: json ? {temperature:0.7, responseMimeType:"application/json"} : {temperature:0.6}
+    generationConfig: json ? {temperature:0.9, responseMimeType:"application/json"} : {temperature:0.8}
   };
+  const t0 = performance.now();
   const r = await fetch(`${API}/models/${encodeURIComponent(cfg.model)}:generateContent`, {
     method:"POST", headers:{"Content-Type":"application/json","x-goog-api-key":cfg.key}, body:JSON.stringify(body)
   });
   const data = await r.json().catch(()=>({}));
   if(!r.ok){
     const m = data?.error?.message || `HTTP ${r.status}`;
-    throw new Error(r.status===400||r.status===403 ? `Gemini refused the request: ${m}. Check the API key and model in Settings.` : `Gemini error: ${m}`);
+    console.error("Gemini error", r.status, data);
+    throw new Error(r.status===400||r.status===403||r.status===404 ? `Gemini refused the request: ${m}. Check the API key and model in Settings.` : `Gemini error: ${m}`);
   }
   const parts = data?.candidates?.[0]?.content?.parts || [];
   const text = parts.filter(p=>!p.thought && p.text).map(p=>p.text).join("").trim();
-  if(!text) throw new Error("Gemini returned an empty answer (it may have been blocked by a safety filter). Try rephrasing.");
+  console.info(`Gemini ${cfg.model} answered in ${Math.round(performance.now()-t0)} ms`);
+  if(!text) throw new Error(`Gemini returned an empty answer (finish reason: ${data?.candidates?.[0]?.finishReason || "unknown"}). Try rephrasing.`);
   return text;
 }
 function parseJSON(t){
-  try { return JSON.parse(t); } catch(e){}
-  const m = t.match(/\{[\s\S]*\}/); if(m){ try { return JSON.parse(m[0]); } catch(e){} }
+  const clean = t.replace(/^```(?:json)?\s*/i,"").replace(/```\s*$/,"");
+  try { return JSON.parse(clean); } catch(e){}
+  const m = clean.match(/\{[\s\S]*\}/); if(m){ try { return JSON.parse(m[0]); } catch(e){} }
   return null;
 }
+const langName = () => cfg.lang==="ro" ? "Romanian" : "English";
+const todayStr = () => new Date().toLocaleDateString(cfg.lang==="ro"?"ro-RO":"en-GB", {day:"numeric",month:"long",year:"numeric"});
 function transcriptText(p){
-  return p.convo.map(m => `${m.who==="pt" ? "Patient" : (p.staff==="GP"?"Doctor":"Nurse")}: ${m.text}`).join("\n");
+  const who = p.staff==="GP" ? "Doctor" : "Nurse";
+  return p.convo.filter(m=>m.who!=="sys").map(m => {
+    if(m.who==="pt") return `PATIENT: ${m.text}`;
+    if(m.who==="doc") return `[${who} handed over a document — ${docLabel(m.doc.type)}: ${m.doc.title}]\n${m.doc.body}\n[end of document]`;
+    return `${who.toUpperCase()}: ${m.text}`;
+  }).join("\n\n");
 }
 function assistantSystem(p){
-  const role = p.staff==="GP" ? "general practitioner (GP)" : "practice nurse";
-  return `You are an AI clinical assistant supporting a ${role} in a primary care clinic. The clinician reviews what you write before it reaches the patient.
-Write the next message the clinician will say to the patient: first person, addressing the patient by first name.
-Use plain, warm language and at most 110 words. Be clinically sensible and follow common primary care guidance. Include safety-netting (when to seek urgent help) when relevant. Stay within the scope of a ${role}.
-Do not invent results or history that aren't in the record or the conversation. If key information is missing, ask the patient one or two focused questions.
-Output only the message text, no headings, labels or notes.`;
+  const role = p.staff==="GP" ? "the family doctor (GP)" : "the practice nurse";
+  return `You are an AI assistant built into a family-medicine clinic's software. You support ${role}. The clinician types an instruction; you carry it out for THIS patient, using the patient record and the whole conversation so far.
+
+Do exactly what the instruction asks. Never swap the requested task for a different one: if asked for a prescription, write the prescription; if asked for a sick note, write the sick note; if asked to explain, explain. If the instruction is impossible or unsafe, say so in "notes" and do the closest safe thing.
+
+Return JSON only:
+{"reply": string, "document": null | {"type": "prescription"|"sick_note"|"referral"|"test_order"|"letter"|"patient_leaflet"|"appointment"|"other", "title": string, "body": string}, "notes": string}
+
+- "reply": the words the clinician says to the patient right now. First person, addresses the patient by first name, warm plain ${langName()}, at most 120 words. It must answer the patient's latest message specifically and be consistent with any document.
+- "document": fill it whenever the instruction asks for (or clearly implies) a prescription, sick note, referral, test order, letter, written instructions or an appointment. Fill it completely from the record and the conversation: for a prescription give drug, strength, form, dose and frequency, duration, quantity and instructions; for a sick note give the condition and exact dates; for a referral give reason, findings and urgency. Use plain text with line breaks. Put [to confirm] where a detail is unknown. Otherwise null.
+- "notes": one or two short lines only the clinician sees: assumptions, safety flags, checks before signing.
+- If the clinician is the nurse and the task needs a doctor (prescribing medicines, sick notes), prepare it marked "draft for GP signature" and mention that in "notes".
+- Do not invent results, diagnoses or history that are not in the record or conversation. If key information is missing, ask the patient one or two focused questions in "reply".
+- Add safety-netting (when to seek urgent help) when clinically relevant.
+- Don't repeat what the clinician already said earlier in the conversation; move the consultation forward.
+Write "reply" and "document" in ${langName()}.`;
 }
 function patientSystem(p){
   const s = p.sc;
-  return `You are role-playing a patient in a training simulation of a family doctor's clinic. Stay fully in character.
+  const needs = s.needs.map(n=>`- [${n.id}] ${n.en}${n.req?" (essential)":" (nice to have)"}`).join("\n");
+  const met = [...p.met];
+  return `You are role-playing a patient in a training simulation of a family doctor's clinic. Stay fully in character as this specific person.
 Name: ${s.name}, ${s.age} years old.
-Personality: ${s.persona}
-Why you came: ${s.opening}
-Private details (reveal only when asked, or when naturally relevant): ${s.hidden}
-What you need before you leave satisfied: ${s.goal}
-You are speaking with the ${p.staff==="GP" ? "doctor (GP)" : "practice nurse"}.
-Rules:
-- React to the clinician's LATEST message as this patient would, in 1-3 short sentences of everyday spoken language.
-- If the clinician asks you questions, answer them from your private details.
-- "satisfied" is true only when your need is reasonably met and you have no important question left. It doesn't need to be perfect. When satisfied, your reply is a short thank-you and goodbye.
-- "satisfied" is false if the message is unclear, dismissive, unsafe, ignores your concern, or asks you something. Then reply with your answer or your follow-up question.
-- From the clinician's 4th message onward, accept any reasonable, safe plan.
-- "mood" is one of "happy", "calm", "worried", "annoyed".
-- "verdict" is one short out-of-character sentence for the scoreboard explaining your judgement of the latest message.
-Return only JSON: {"reply": string, "satisfied": boolean, "mood": string, "verdict": string}`;
+Personality and way of speaking: ${s.persona}
+Why you came today: ${openingOf(s)}
+Private details (reveal when asked, or when it becomes naturally relevant): ${s.hidden}
+You are talking to the ${p.staff==="GP" ? "doctor (GP)" : "practice nurse"}.
+
+Your needs. The clinician cannot see this list:
+${needs}
+Already met earlier in this consultation: ${met.length ? met.join(", ") : "none"}
+
+How to respond:
+- Read the WHOLE conversation, including any documents the clinician handed you (prescriptions, notes, referrals, leaflets). React to the clinician's LATEST message and documents, to what they actually say.
+- Mention concrete details from what you were told or given (the medicine name, the dates, the advice), so it is clear you understood it, or say what confused you.
+- A need is met only if the clinician's words or documents address it concretely and safely. Vague promises ("we'll see", "come back another time") don't meet it. If you were given a prescription you asked for, that need is met.
+- If the clinician asked you questions, answer them truthfully from your private details.
+- If something was wrong, unsafe, rude or ignored your question, react as a real person would and ask again.
+- Never repeat a sentence you already said. Speak naturally in ${langName()}, 1-3 sentences.
+- When every essential need is met and you have no question left, thank them and say goodbye in your own way.
+
+Return JSON only:
+{"reply": string, "mood": "happy"|"calm"|"worried"|"annoyed", "met": [ids of ALL needs met so far, including earlier ones], "verdict": string}
+"verdict" is one short out-of-character sentence in ${langName()} for the scoreboard, judging the clinician's latest message and documents.`;
 }
 async function aiDraft(p, instruction){
-  if(!cfg.key){ await wait(900); return p.sc.draft; }
-  const user = `Patient record: ${p.sc.record}
+  const ins = instruction || T_("Write the best next reply to the patient's latest message, addressing everything they asked.", "Scrie cel mai bun răspuns la ultimul mesaj al pacientului, acoperind tot ce a întrebat.");
+  if(!live()){ await wait(700); return offlineDraft(p, ins); }
+  const user = `Today: ${todayStr()}
+Clinician: ${p.staff==="GP" ? "GP" : "practice nurse"}
+Patient record: ${recordOf(p.sc)}
 Patient: ${p.sc.name}, ${p.sc.age} years old.
+
 Conversation so far:
 ${transcriptText(p)}
 
-Clinician's instruction to you: ${instruction || "Draft the best next reply to the patient."}`;
-  return gemini(assistantSystem(p), user, false);
+Clinician's instruction to you: ${ins}`;
+  const txt = await gemini(assistantSystem(p), user, true);
+  const j = parseJSON(txt);
+  if(!j || typeof j.reply !== "string") return {reply: txt.trim(), document:null, notes:"", source:"gemini"};
+  const d = j.document && typeof j.document==="object" && j.document.body ? {type:j.document.type||"other", title:j.document.title||docLabel(j.document.type), body:String(j.document.body)} : null;
+  return {reply:j.reply.trim(), document:d, notes:j.notes||"", source:"gemini"};
+}
+function offlineDraft(p, ins){
+  const low = ins.toLowerCase();
+  const wantsDoc = /prescri|rețet|retet|note|certif|adeverin|refer|trimit|letter|scrisoare|leaflet|instruc|test|analiz|plan|record|fișă|fisa/.test(low);
+  const doc = wantsDoc && p.sc.doc ? {...p.sc.doc} : null;
+  return { reply: p.sc.draft, document: doc, notes: T_("Offline demo: this is a pre-written draft. Add a Gemini API key in Settings for real AI drafts.", "Demo offline: acesta este un text scris dinainte. Adaugă o cheie Gemini în Setări pentru răspunsuri AI reale."), source:"offline" };
 }
 async function patientReact(p){
   const clinicianTurns = p.convo.filter(m=>m.who==="cl").length;
-  if(!cfg.key){
-    await wait(1000);
-    const all = p.convo.filter(m=>m.who==="cl").map(m=>m.text.toLowerCase()).join(" ");
-    const hits = p.sc.kw.filter(k=>all.includes(k)).length;
-    const ok = hits >= 3 || (clinicianTurns >= 3 && all.length > 120);
-    return ok
-      ? {reply:p.sc.thanks, satisfied:true, mood:"happy", verdict:`Covered ${hits} of the points I cared about (offline scoring).`}
-      : {reply: clinicianTurns>1 ? "Sorry, I'm still not sure what I should do. Can you explain a bit more?" : p.sc.follow,
-         satisfied:false, mood: hits ? "calm" : "worried", verdict:`Only ${hits} of my concerns addressed so far (offline scoring).`};
+  if(!live()){
+    await wait(900);
+    const all = p.convo.filter(m=>m.who==="cl"||m.who==="doc").map(m=> (m.text || (m.doc.title+" "+m.doc.body)).toLowerCase()).join(" ");
+    const met = p.sc.needs.filter(n=>n.kw.some(k=>all.includes(k))).map(n=>n.id);
+    const missing = p.sc.needs.filter(n=>n.req && !met.includes(n.id));
+    if(!missing.length) return {reply:p.sc.thanks, mood:"happy", met, verdict:T_("All my main needs were covered (offline scoring).","Mi s-au rezolvat nevoile principale (scor offline).")};
+    const ask = T_(`Thank you, but what about this: ${missing[0].en.toLowerCase()}?`, `Mulțumesc, dar cum rămâne cu asta: ${missing[0].ro.toLowerCase()}?`);
+    return {reply: clinicianTurns===1 && cfg.lang!=="ro" ? p.sc.follow : ask, mood: met.length ? "calm" : "worried", met,
+      verdict:T_(`${missing.length} essential need(s) still open (offline scoring).`, `${missing.length} nevoi esențiale încă nerezolvate (scor offline).`)};
   }
   const txt = await gemini(patientSystem(p), `Conversation so far:\n${transcriptText(p)}\n\nRespond as ${p.sc.name.split(" ")[0]} to the clinician's latest message.`, true);
   const j = parseJSON(txt);
-  if(!j || typeof j.reply !== "string") return {reply: txt.slice(0,400), satisfied:false, mood:"calm", verdict:"(Couldn't read the patient's judgement.)"};
-  return {reply:j.reply, satisfied: j.satisfied===true || j.satisfied==="true", mood:j.mood||"calm", verdict:j.verdict||""};
+  if(!j || typeof j.reply !== "string") return {reply: txt.slice(0,400), mood:"calm", met:[...p.met], verdict:"(Couldn't read the patient's judgement.)"};
+  const ids = new Set(p.sc.needs.map(n=>n.id));
+  const met = Array.isArray(j.met) ? j.met.map(String).filter(id=>ids.has(id)) : [];
+  return {reply:j.reply, mood:j.mood||"calm", met, verdict:j.verdict||""};
 }
 const wait = ms => new Promise(r=>setTimeout(r,ms));
 
 /* ================= Map & geometry ================= */
-const cv = $("#cv"), ctx = cv.getContext("2d");
-ctx.imageSmoothingEnabled = false;
-const W = cv.width, H = cv.height, TW = 32, TH = 16, OX = 236, OY = 64;
-const GW = 14, GH = 12;
+const cv = $("#cv"), mainCtx = cv.getContext("2d");
+let ctx = mainCtx;
+const RES = 2, W = 540, H = 330, TW = 32, TH = 16, OX = 296, OY = 78;
+const GW = 14, GH = 12, WH = 46;
 const iso = (gx,gy) => ({x: OX + (gx-gy)*TW/2, y: OY + (gx+gy)*TH/2});
 
 const SEATS = [];
 for(let i=0;i<5;i++) SEATS.push({gx:4.5+i, gy:8.55, row:"A", occ:null});
 for(let i=0;i<5;i++) SEATS.push({gx:4.5+i, gy:10.55, row:"B", occ:null});
-const DOOR_OUT = {gx:-0.9, gy:9.5}, DOOR_IN = {gx:0.6, gy:9.5}, HUB = {gx:3.5, gy:7.5};
+const DOOR_OUT = {gx:1.5, gy:17.6}, DOOR_IN = {gx:1.5, gy:11.4}, HUB = {gx:3.5, gy:7.5}, AISLE = {gx:1.5, gy:9.5};
 const ROOMS = {
   GP:    { doorway:[{gx:3.5,gy:6.5},{gx:3.5,gy:5.3}], chair:{gx:3.6,gy:3.55}, staff:{gx:3.6,gy:1.45} },
   Nurse: { doorway:[{gx:10.5,gy:7.5},{gx:10.5,gy:6.5},{gx:10.5,gy:5.3}], chair:{gx:10.6,gy:3.55}, staff:{gx:10.6,gy:1.45} }
 };
 function pathHubToSeat(s){ return s.row==="A" ? [{gx:s.gx,gy:7.5},{gx:s.gx,gy:s.gy}] : [{gx:3.5,gy:9.5},{gx:s.gx,gy:9.5},{gx:s.gx,gy:s.gy}]; }
 function pathSeatToHub(s){ return s.row==="A" ? [{gx:s.gx,gy:7.5},{...HUB}] : [{gx:s.gx,gy:9.5},{gx:3.5,gy:9.5},{...HUB}]; }
-function pathDoorToSeat(s){ return [{...DOOR_IN},{gx:3.5,gy:9.5}, ...(s.row==="A" ? [{...HUB}, ...pathHubToSeat(s)] : [{gx:s.gx,gy:9.5},{gx:s.gx,gy:s.gy}])]; }
-function pathSeatToDoor(s){ return s.row==="A" ? [{gx:s.gx,gy:7.5},{...HUB},{gx:3.5,gy:9.5},{...DOOR_IN},{...DOOR_OUT}] : [{gx:s.gx,gy:9.5},{...DOOR_IN},{...DOOR_OUT}]; }
+function pathDoorToSeat(s){ return [{...DOOR_IN},{...AISLE}, ...(s.row==="A" ? [{gx:3.5,gy:9.5},{...HUB},{gx:s.gx,gy:7.5},{gx:s.gx,gy:s.gy}] : [{gx:s.gx,gy:9.5},{gx:s.gx,gy:s.gy}])]; }
+function pathSeatToDoor(s){ return s.row==="A" ? [{gx:s.gx,gy:7.5},{...HUB},{gx:3.5,gy:9.5},{...AISLE},{...DOOR_IN},{...DOOR_OUT}] : [{gx:s.gx,gy:9.5},{...AISLE},{...DOOR_IN},{...DOOR_OUT}]; }
 function pathHubToRoom(r){ const R = ROOMS[r]; return r==="GP" ? [...R.doorway, R.chair] : [{gx:10.5,gy:7.5}, ...R.doorway.slice(1), R.chair]; }
-function pathRoomToHub(r){ const R = ROOMS[r]; const back = [...R.doorway].reverse(); return [...back, {...HUB}]; }
-function pathRoomToDoor(r){ return [...pathRoomToHub(r), {gx:3.5,gy:9.5}, {...DOOR_IN}, {...DOOR_OUT}]; }
+function pathRoomToHub(r){ const R = ROOMS[r]; return [...[...R.doorway].reverse(), {...HUB}]; }
+function pathRoomToDoor(r){ return [...pathRoomToHub(r), {gx:3.5,gy:9.5}, {...AISLE}, {...DOOR_IN}, {...DOOR_OUT}]; }
 
 /* ================= Drawing primitives ================= */
 function poly(pts, fill, stroke){ ctx.beginPath(); pts.forEach((p,i)=> i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)); ctx.closePath();
-  ctx.fillStyle=fill; ctx.fill(); if(stroke){ctx.strokeStyle=stroke; ctx.lineWidth=1; ctx.stroke();} }
+  if(fill){ ctx.fillStyle=fill; ctx.fill(); } if(stroke){ ctx.strokeStyle=stroke; ctx.lineWidth=0.75; ctx.stroke(); } }
 const up = (p,h) => ({x:p.x, y:p.y-h});
+function line(a,b,col,w=0.75){ ctx.strokeStyle=col; ctx.lineWidth=w; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); }
 function tile(gx,gy,c,w=1,d=1){ poly([iso(gx,gy),iso(gx+w,gy),iso(gx+w,gy+d),iso(gx,gy+d)], c); }
-function box(gx,gy,w,d,h,top,left,right,line="rgba(0,0,0,.45)"){
-  const a=iso(gx,gy), b=iso(gx+w,gy), c=iso(gx+w,gy+d), e=iso(gx,gy+d);
-  poly([e,c,up(c,h),up(e,h)], left, line);
-  poly([c,b,up(b,h),up(c,h)], right, line);
-  poly([up(a,h),up(b,h),up(c,h),up(e,h)], top, line);
+function box(gx,gy,w,d,h,top,left,right,lineCol="rgba(0,0,0,.42)",z=0){
+  const a=up(iso(gx,gy),z), b=up(iso(gx+w,gy),z), c=up(iso(gx+w,gy+d),z), e=up(iso(gx,gy+d),z);
+  poly([e,c,up(c,h),up(e,h)], left, lineCol);
+  poly([c,b,up(b,h),up(c,h)], right, lineCol);
+  poly([up(a,h),up(b,h),up(c,h),up(e,h)], top, lineCol);
 }
 function shade(hex, f){ const n=parseInt(hex.slice(1),16); let r=n>>16,g=n>>8&255,b=n&255;
   r=Math.max(0,Math.min(255,Math.round(r*f))); g=Math.max(0,Math.min(255,Math.round(g*f))); b=Math.max(0,Math.min(255,Math.round(b*f)));
   return "#"+((1<<24)|(r<<16)|(g<<8)|b).toString(16).slice(1); }
-function cbox(gx,gy,w,d,h,col,line){ box(gx,gy,w,d,h, shade(col,1.12), shade(col,.78), shade(col,.6), line); }
+function cbox(gx,gy,w,d,h,col,z=0,lineCol){ box(gx,gy,w,d,h, shade(col,1.14), shade(col,.8), shade(col,.62), lineCol, z); }
+function shadowBox(gx,gy,w,d,a=.2){ poly([iso(gx,gy),iso(gx+w+.18,gy),iso(gx+w+.18,gy+d+.18),iso(gx,gy+d+.18)], `rgba(0,0,0,${a})`); }
 function px(c,x,y,w,h){ ctx.fillStyle=c; ctx.fillRect(Math.round(x),Math.round(y),w,h); }
+// quads on box faces: L = the +y face (runs along x), R = the +x face (runs along y)
+function faceL(gx,gy,d,u0,u1,h0,h1,col,z=0){ const a=iso(gx+u0,gy+d), b=iso(gx+u1,gy+d); poly([up(a,z+h0),up(b,z+h0),up(b,z+h1),up(a,z+h1)], col); }
+function faceR(gx,gy,w,v0,v1,h0,h1,col,z=0){ const a=iso(gx+w,gy+v0), b=iso(gx+w,gy+v1); poly([up(a,z+h0),up(b,z+h0),up(b,z+h1),up(a,z+h1)], col); }
+function topQuad(gx,gy,w,d,h,col){ poly([up(iso(gx,gy),h),up(iso(gx+w,gy),h),up(iso(gx+w,gy+d),h),up(iso(gx,gy+d),h)], col); }
+// quads on walls: back wall (gy=0) and left wall (gx=0)
+const qX = (gx0,gx1,h0,h1,gy=0) => [up(iso(gx0,gy),h0),up(iso(gx1,gy),h0),up(iso(gx1,gy),h1),up(iso(gx0,gy),h1)];
+const qY = (gy0,gy1,h0,h1,gx=0) => [up(iso(gx,gy0),h0),up(iso(gx,gy1),h0),up(iso(gx,gy1),h1),up(iso(gx,gy0),h1)];
+function h2(x,y){ let h = Math.imul((x*73856093) ^ (y*19349663), 2654435761) >>> 0; return (h % 1000) / 1000; }
+function pattern(rows, x0, y0, col){ rows.forEach((r,j)=>{ for(let i=0;i<r.length;i++) if(r[i]==="X") px(col,x0+i,y0+j,1,1); }); }
 
-/* walls */
-function wallX(gx,gy,len,h,col){ const a=iso(gx,gy), b=iso(gx+len,gy); poly([a,b,up(b,h),up(a,h)], col, "rgba(0,0,0,.5)"); }
-function wallY(gx,gy,len,h,col){ const a=iso(gx,gy), b=iso(gx,gy+len); poly([a,b,up(b,h),up(a,h)], col, "rgba(0,0,0,.5)"); }
-function windowX(gx,gy,w,y0,y1){ const a=iso(gx,gy), b=iso(gx+w,gy);
-  poly([up(a,y0),up(b,y0),up(b,y1),up(a,y1)], "#8fd3ff", "#2b3f52");
-  const m=iso(gx+w/2,gy); ctx.strokeStyle="#2b3f52"; ctx.beginPath(); ctx.moveTo(m.x,m.y-y0); ctx.lineTo(m.x,m.y-y1); ctx.stroke();
-  poly([up(a,y1),up(iso(gx+w*0.35,gy),y1),up(iso(gx+w*0.15,gy),y0),up(a,y0)],"rgba(255,255,255,.35)"); }
-function posterY(gx,gy,w,y0,y1,col){ const a=iso(gx,gy), b=iso(gx,gy+w); poly([up(a,y0),up(b,y0),up(b,y1),up(a,y1)], col, "#1b1b1b"); }
-
-/* ================= Static scene ================= */
-function drawFloorAndWalls(){
-  // backdrop
-  const g = ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,"#122434"); g.addColorStop(1,"#0a141c");
-  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+/* ================= Static layer: ground, floors, walls ================= */
+let staticLayer = null;
+function buildStatic(){
+  const c = document.createElement("canvas"); c.width = W*RES; c.height = H*RES;
+  ctx = c.getContext("2d"); ctx.setTransform(RES,0,0,RES,0,0);
+  drawStatic();
+  ctx = mainCtx; staticLayer = c;
+}
+function drawStatic(){
+  // grass
+  ctx.fillStyle = "#4d8a3b"; ctx.fillRect(0,0,W,H);
+  for(let x=-14;x<28;x++) for(let y=-14;y<28;y++){
+    const p = iso(x+.5,y+.5); if(p.x<-24||p.x>W+24||p.y<-24||p.y>H+24) continue;
+    const r = h2(x,y); tile(x,y, r<.33?"#538f40":r<.66?"#4b8639":"#579544");
+    for(let k=0;k<3;k++){ const q=iso(x+h2(x+k,y*3)*.9, y+h2(x*5,y+k)*.9); px(k%2?"#6aa852":"#3f7530", q.x, q.y, 1, 2); }
+  }
+  // back trees (behind the building)
+  for(const [gx,gy,s] of [[2,-3.2,1.1],[8,-3.6,1.25],[12.8,-2.6,1],[-3.2,1.5,1],[-3.6,7.5,1.2],[16.5,-1.5,.9]]) tree(gx,gy,s);
+  // pavement around the front and right side, path to the entrance
+  const pave = (x,y)=>{ tile(x,y,(x+y)%2?"#c4bdab":"#b8b19f"); poly([iso(x,y),iso(x+1,y),iso(x+1,y+1),iso(x,y+1)], null, "rgba(90,80,60,.35)"); };
+  for(let x=-1;x<16;x++) pave(x,12);
+  for(let y=-1;y<12;y++){ pave(14,y); }
+  for(let y=13;y<20;y++){ pave(1,y); }
+  pave(15,12); pave(14,12);
+  // kerb + flower bed along the front
+  for(let x=3;x<14;x++){ tile(x+.1,13.05,"#5a3d27",.85,.55); for(let k=0;k<3;k++){ const q=iso(x+.2+k*.25, 13.3+h2(x,k)*.2); px(["#f4d03f","#e74c3c","#f5f5f5"][(x+k)%3], q.x, q.y-1, 2, 2); px("#2f6e2f", q.x, q.y+1, 1, 1);} }
   // floors
   for(let x=0;x<GW;x++) for(let y=0;y<GH;y++){
-    let c;
-    if(y<6 && x<7) c = (x+y)%2 ? "#b4834e" : "#a77746";       // GP: wood
-    else if(y<6) c = (x+y)%2 ? "#d4e7ee" : "#c2dbe4";        // nurse: tiles
-    else c = (x+y)%2 ? "#3d917a" : "#34836e";                 // waiting: lino
-    tile(x,y,c);
+    const r = h2(x+40,y+40);
+    if(y<6 && x<7){                          // GP: wooden planks
+      tile(x,y, r<.33?"#bc8c57":r<.66?"#b2834e":"#aa7b47");
+      for(const k of [1/3,2/3]) line(iso(x,y+k), iso(x+1,y+k), "rgba(84,48,20,.35)");
+      const s = .2+r*.6; line(iso(x+s,y), iso(x+s,y+1/3), "rgba(84,48,20,.3)"); line(iso(x+1-s,y+1/3), iso(x+1-s,y+2/3), "rgba(84,48,20,.3)");
+    } else if(y<6){                          // nurse: clinical tiles
+      tile(x,y,(x+y)%2?"#dcebf1":"#d0e3ea");
+      poly([iso(x,y),iso(x+1,y),iso(x+1,y+1),iso(x,y+1)], null, "#b5cad3");
+    } else {                                 // waiting: lino
+      tile(x,y,(x+y)%2?"#409a80":"#388b73");
+      for(let k=0;k<4;k++){ const q=iso(x+h2(x+k,y)*.9+.05, y+h2(y+k,x)*.9+.05); px(k%2?"#5bb297":"#2f7a64", q.x, q.y, 1, 1); }
+    }
   }
-  // rug in GP office, mat at door
-  tile(2,3,"#7b3d5a",3,2); tile(2.2,3.2,"#93506f",2.6,1.6);
-  tile(0,9,"#6b4a2e",1.2,1);
-  // floor edge lip
-  const e1=iso(0,GH), e2=iso(GW,GH), e3=iso(GW,0);
-  poly([e1,e2,{x:e2.x,y:e2.y+5},{x:e1.x,y:e1.y+5}], "#1d3a33");
-  poly([e2,e3,{x:e3.x,y:e3.y+5},{x:e2.x,y:e2.y+5}], "#15302a");
-  // back walls along gy=0
-  const WH=46;
-  wallX(0,0,7,WH,"#d9c49a"); wallX(7,0,7,WH,"#b9d3e6");
-  windowX(1,0,2,16,36); windowX(4.6,0,1.4,16,36); windowX(8.2,0,2,16,36);
-  // left wall along gx=0
-  wallY(0,0,6,WH,"#bba77f"); wallY(0,6,3,WH,"#6aa392"); wallY(0,10,2,WH,"#6aa392");
-  // door gap 9..10: dark opening + frame
-  const d1=iso(0,9), d2=iso(0,10);
-  poly([d1,d2,up(d2,32),up(d1,32)], "#0b1218");
-  poly([up(d1,32),up(d2,32),up(d2,WH),up(d1,WH)], "#6aa392", "rgba(0,0,0,.5)");
-  ctx.strokeStyle="#e9e0c4"; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(d1.x,d1.y); ctx.lineTo(d1.x,d1.y-32); ctx.lineTo(d2.x,d2.y-32); ctx.lineTo(d2.x,d2.y); ctx.stroke(); ctx.lineWidth=1;
-  // entrance sign
-  const sgn=iso(0,9.5); px("#1e7a3e",sgn.x-9,sgn.y-44,18,8); ctx.fillStyle="#fff"; ctx.font="7px monospace"; ctx.textAlign="center"; ctx.fillText("IN",sgn.x,sgn.y-38);
-  // posters / boards
-  posterY(0,6.5,1.4,14,34,"#f2e6b8"); posterY(0,11,0.7,16,30,"#e9806b"); posterY(0,2.2,1.2,18,34,"#f7f3e6");
-  // wall clocks
-  for(const gx of [5.9, 12.4]){ const p=iso(gx,0); ctx.fillStyle="#fff"; ctx.beginPath(); ctx.arc(p.x,p.y-38,4,0,7); ctx.fill(); ctx.strokeStyle="#222"; ctx.stroke(); }
-  // room signs on back wall
+  // rug in GP office
+  tile(2,3,"#7b3d5a",3,2); tile(2.15,3.15,"#a0506f",2.7,1.7); tile(2.35,3.35,"#7b3d5a",2.3,1.3);
+  for(let i=0;i<4;i++) tile(2.6+i*.5,3.85,"#e2b04a",.25,.3);
+  // entrance mat
+  tile(1,10.7,"#4b3322",1,1.25); for(let k=1;k<5;k++) line(iso(1,10.7+k*.25), iso(2,10.7+k*.25), "rgba(255,255,255,.12)");
+  // light pools and window light
+  for(const [gx,gy,r] of [[3.5,3,70],[10.5,3,70],[6,9.5,90],[11.5,9.5,70]]){ const p=iso(gx,gy); const g=ctx.createRadialGradient(p.x,p.y,4,p.x,p.y,r);
+    g.addColorStop(0,"rgba(255,244,210,.14)"); g.addColorStop(1,"rgba(255,244,210,0)"); ctx.fillStyle=g; ctx.fillRect(p.x-r,p.y-r,r*2,r*2); }
+  for(const [a,w] of [[1.8,1.6],[4.6,1.4],[9.5,1.6]]) poly([iso(a,.05),iso(a+w,.05),iso(a+w+.9,2.4),iso(a+.9,2.4)], "rgba(255,250,215,.12)");
+  for(const [a,w] of [[6.5,1.5],[10.2,1.4]]) poly([iso(.05,a),iso(.05,a+w),iso(2.2,a+w+.7),iso(2.2,a+.7)], "rgba(255,250,215,.10)");
+  // ambient occlusion along the walls
+  poly([iso(0,0),iso(GW,0),iso(GW,.45),iso(.45,.45)], "rgba(0,0,0,.13)");
+  poly([iso(0,0),iso(0,GH),iso(.45,GH),iso(.45,.45)], "rgba(0,0,0,.13)");
+  poly([iso(0,6),iso(GW,6),iso(GW,6.3),iso(0,6.3)], "rgba(0,0,0,.10)");
+  poly([iso(0,5.7),iso(GW,5.7),iso(GW,6),iso(0,6)], "rgba(0,0,0,.08)");
+  // ---- back wall (gy = 0) ----
+  poly(qX(0,7,0,WH), "#e3cf9f"); poly(qX(7,14,0,WH), "#c9dded");
+  poly(qX(0,7,2,15), "#b98f5d"); for(let x=.5;x<7;x+=.5) line(up(iso(x,0),2), up(iso(x,0),15), "rgba(70,40,15,.35)");
+  poly(qX(7,14,2,15), "#a3c3d8"); for(let x=7.35;x<14;x+=.35) line(up(iso(x,0),2), up(iso(x,0),15), "rgba(60,100,130,.35)");
+  for(const h of [6.5,11]) line(up(iso(7,0),h), up(iso(14,0),h), "rgba(60,100,130,.35)");
+  poly(qX(0,7,15,16.5), "#8a6237"); poly(qX(7,14,15,16.5), "#6f98b5");
+  poly(qX(0,14,0,2), "#3c2a1c");
+  // ---- left wall (gx = 0) ----
+  poly(qY(0,6,0,WH), "#d4bf8f"); poly(qY(6,12,0,WH), "#86bba9");
+  poly(qY(0,6,2,15), "#a98252"); for(let y=.5;y<6;y+=.5) line(up(iso(0,y),2), up(iso(0,y),15), "rgba(70,40,15,.35)");
+  poly(qY(6,12,2,15), "#4f8f7d"); for(let y=6.5;y<12;y+=.5) line(up(iso(0,y),2), up(iso(0,y),15), "rgba(20,60,50,.35)");
+  poly(qY(0,6,15,16.5), "#7d5832"); poly(qY(6,12,15,16.5), "#3c7564");
+  poly(qY(0,12,0,2), "#2e2318");
+  // windows, curtains, radiators
+  windowX(1.8,1.6,19,38,"#8e2f4a"); windowX(4.6,1.4,19,38,"#8e2f4a"); windowX(9.5,1.6,19,38,null);
+  windowY(6.5,1.5,19,38); windowY(10.2,1.4,19,38);
+  for(const [a,w] of [[1.95,1.3],[9.65,1.3]]){ poly(qX(a,a+w,4,12,.02), "#eceae2", "rgba(0,0,0,.3)"); for(let x=a+.12;x<a+w;x+=.12) line(up(iso(x,.02),5), up(iso(x,.02),11), "rgba(0,0,0,.18)"); }
+  // GP: eye chart and mirror over the sink
+  poly(qY(3.2,4.2,14,36,.02), "#fbfaf4", "#333");
+  for(let r=0;r<5;r++){ const n=r+1, hgt=4.2-r*.6, y0=33-r*4.2-hgt; for(let i=0;i<n;i++){ const u0=3.3+(i+.5)*(.8/(n))-.05*(1.2-r*.18), u1=u0+.1*(1.2-r*.18); poly(qY(u0,u1,y0,y0+hgt,.02),"#1b1b1b"); } }
+  poly(qY(1.65,2.45,17,30,.02), "#b9c9d2", "#5b6b74"); poly(qY(1.75,2.0,19,28,.02), "rgba(255,255,255,.45)");
+  // nurse: vaccination poster, sharps bin
+  poly(qX(11.95,13.0,16,36,.02), "#ffffff", "#333"); poly(qX(11.95,13.0,31,36,.02), "#2f6fd6");
+  poly(qX(12.35,12.6,20,28,.02), "#e3583f"); poly(qX(12.17,12.78,22.5,25.5,.02), "#e3583f");
+  // waiting room: notice board on the left wall
+  poly(qY(8.3,9.9,19,34,.02), "#b88a56", "#5a3b20");
+  for(const [a,b,h0,h1,c] of [[8.4,8.8,26,32,"#f9e79f"],[8.9,9.3,27,33,"#aed6f1"],[9.4,9.8,25,31,"#f5b7b1"],[8.5,9.0,20,25,"#ffffff"],[9.15,9.7,20,24.5,"#d5f5e3"]]) poly(qY(a,b,h0,h1,.02), c, "rgba(0,0,0,.25)");
+  // room signs on the back wall
   signX(2.2,"DOCTOR","#f5c842"); signX(9.4,"NURSE","#7fb0ff");
-  // skirting
-  ctx.strokeStyle="rgba(0,0,0,.35)"; const s0=iso(0,0); ctx.beginPath(); ctx.moveTo(iso(0,GH).x,iso(0,GH).y-3); ctx.lineTo(s0.x,s0.y-3); ctx.lineTo(iso(GW,0).x,iso(GW,0).y-3); ctx.stroke();
+  // wall caps and wall ends
+  poly([up(iso(0,0),WH),up(iso(GW,0),WH),up(iso(GW,-.22),WH),up(iso(-.22,-.22),WH)], "#f2ecdc", "rgba(0,0,0,.35)");
+  poly([up(iso(0,0),WH),up(iso(0,GH),WH),up(iso(-.22,GH),WH),up(iso(-.22,-.22),WH)], "#e8e1cf", "rgba(0,0,0,.35)");
+  poly([iso(GW,0),iso(GW,-.22),up(iso(GW,-.22),WH),up(iso(GW,0),WH)], "#9a8f78");
+  poly([iso(0,GH),iso(-.22,GH),up(iso(-.22,GH),WH),up(iso(0,GH),WH)], "#a79d86");
 }
-function signX(gx,txt,col){ const a=iso(gx,0), b=iso(gx+2.2,0); poly([up(a,40),up(b,40),up(b,46),up(a,46)], col, "#111");
-  const m=iso(gx+1.1,0); ctx.save(); ctx.translate(m.x,m.y-41.5); ctx.transform(1,0.5,0,1,0,0); ctx.fillStyle="#111"; ctx.font="bold 6px monospace"; ctx.textAlign="center"; ctx.fillText(txt,0,2); ctx.restore(); }
+function windowX(gx,w,h0,h1,curtain){
+  poly(qX(gx-.07,gx+w+.07,h0-2,h1+2,.01), "#f4f1e6", "rgba(0,0,0,.4)");
+  const top = up(iso(gx+w/2,0),h1), bot = up(iso(gx+w/2,0),h0);
+  const g = ctx.createLinearGradient(0, top.y-8, 0, bot.y+8); g.addColorStop(0,"#7cc6f2"); g.addColorStop(1,"#d9f1ff");
+  const pts = qX(gx,gx+w,h0,h1,.01); poly(pts, g);
+  ctx.save(); ctx.beginPath(); pts.forEach((p,i)=> i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)); ctx.closePath(); ctx.clip();
+  const c = up(iso(gx+w*.35,0),h1-6); ctx.fillStyle="rgba(255,255,255,.9)"; for(const [dx,dy,rx,ry] of [[0,0,7,3],[5,-2,5,3],[-5,1,4,2]]){ ctx.beginPath(); ctx.ellipse(c.x+dx,c.y+dy,rx,ry,0,0,7); ctx.fill(); }
+  const t2 = up(iso(gx+w*.85,0),h0+10); ctx.fillStyle="#3e8a3a"; ctx.beginPath(); ctx.ellipse(t2.x,t2.y,8,6,0,0,7); ctx.fill();
+  poly([up(iso(gx,0),h1),up(iso(gx+w*.3,0),h1),up(iso(gx+w*.12,0),h0),up(iso(gx,0),h0)], "rgba(255,255,255,.28)");
+  ctx.restore();
+  line(up(iso(gx+w/2,.01),h0), up(iso(gx+w/2,.01),h1), "#e9e4d4", 1.5);
+  line(up(iso(gx,.01),h0+(h1-h0)*.66), up(iso(gx+w,.01),h0+(h1-h0)*.66), "#e9e4d4", 1.5);
+  poly(qX(gx-.12,gx+w+.12,h0-3.5,h0-1.5,.02), "#ffffff", "rgba(0,0,0,.35)");
+  if(curtain){ poly(qX(gx-.3,gx+.08,h0-5,h1+4,.03), curtain, "rgba(0,0,0,.35)"); poly(qX(gx+w-.08,gx+w+.3,h0-5,h1+4,.03), curtain, "rgba(0,0,0,.35)");
+    poly(qX(gx-.35,gx+w+.35,h1+4,h1+5.5,.03), "#5b3b22"); }
+}
+function windowY(gy,w,h0,h1){
+  poly(qY(gy-.07,gy+w+.07,h0-2,h1+2,.01), "#f4f1e6", "rgba(0,0,0,.4)");
+  const top = up(iso(0,gy+w/2),h1), bot = up(iso(0,gy+w/2),h0);
+  const g = ctx.createLinearGradient(0, top.y-8, 0, bot.y+8); g.addColorStop(0,"#7cc6f2"); g.addColorStop(1,"#d9f1ff");
+  const pts = qY(gy,gy+w,h0,h1,.01); poly(pts, g);
+  ctx.save(); ctx.beginPath(); pts.forEach((p,i)=> i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)); ctx.closePath(); ctx.clip();
+  const c = up(iso(0,gy+w*.6),h1-6); ctx.fillStyle="rgba(255,255,255,.9)"; ctx.beginPath(); ctx.ellipse(c.x,c.y,7,3,0,0,7); ctx.fill();
+  ctx.restore();
+  line(up(iso(.01,gy+w/2),h0), up(iso(.01,gy+w/2),h1), "#e9e4d4", 1.5);
+  poly(qY(gy-.12,gy+w+.12,h0-3.5,h0-1.5,.02), "#ffffff", "rgba(0,0,0,.35)");
+}
+function signX(gx,txt,col){ poly(qX(gx,gx+2.2,40,46.5,.02), col, "#111");
+  const m=iso(gx+1.1,0); ctx.save(); ctx.translate(m.x,m.y-42.2); ctx.transform(1,0.5,0,1,0,0); ctx.fillStyle="#111"; ctx.font="bold 6px monospace"; ctx.textAlign="center"; ctx.fillText(txt,0,2); ctx.restore(); }
+function tree(gx,gy,s=1){ const p=iso(gx,gy), x=p.x, y=p.y;
+  ctx.fillStyle="rgba(0,0,0,.22)"; ctx.beginPath(); ctx.ellipse(x+3,y+1,13*s,5*s,0,0,7); ctx.fill();
+  px("#5b3a21",x-2,y-16*s,4,16*s); px("#7a5030",x-2,y-16*s,1,16*s);
+  for(const [dx,dy,rx,ry,c] of [[0,-26,13,11,"#2d6a2d"],[-6,-30,9,8,"#3a8236"],[6,-29,9,8,"#357a33"],[0,-36,9,8,"#45953f"],[-3,-38,4,3,"#64b354"],[5,-31,3,2,"#5aa84a"]]){
+    ctx.fillStyle=c; ctx.beginPath(); ctx.ellipse(x+dx*s,y+dy*s,rx*s,ry*s,0,0,7); ctx.fill(); } }
 
-/* furniture & walls as depth-sorted items */
+/* ================= Furniture & dynamic scenery (depth sorted) ================= */
 const FURN = [];
 function addF(depth, fn){ FURN.push({depth, draw:fn}); }
 (function layout(){
-  // partition: front wall of rooms along gy=6, doors at x=3 and x=10 (cutaway height)
-  for(let x=0;x<GW;x++){ if(x===3||x===10) continue;
-    const col = x<7 ? "#d9c49a" : "#b9d3e6";
-    addF(x+0.5+6-0.05, ()=>box(x,5.88,1,0.12,12,"#f0ead8",shade(col,.85),shade(col,.65))); }
-  // door posts
-  for(const x of [3,4,10,11]) addF(x+6, ()=>box(x-0.06,5.86,0.12,0.16,16,"#5b3b22","#4a2f1b","#3a2414"));
-  // partition between rooms along gx=7
-  for(let y=0;y<6;y++) addF(7+y+0.5-0.05, ()=>box(6.88,y,0.12,1,12,"#f0ead8","#c7b78f","#9fb6c8"));
-  // GP office
-  addF(1.2+0.5, ()=>cbox(0.1,0.15,1.2,0.5,30,"#6d4a2c"));     // bookshelf
-  addF(1.2+0.5+.1, ()=>{ for(let i=0;i<3;i++){ const p=iso(0.15,0.62); for(let j=0;j<5;j++) px(["#c0392b","#2e86c1","#f1c40f","#27ae60","#8e44ad"][(i+j)%5], p.x+4+j*3, p.y-27+i*9-j*1.5, 2,6);} });
-  addF(0.5+2, ()=>cbox(0.12,1.6,0.6,0.9,12,"#dfe7ea"));     // sink unit
-  addF(3.1+1.4, ()=>cbox(2.4,1.95,2.3,0.85,11,"#8a5a32"));  // desk
-  addF(3.1+1.6, ()=>{ cbox(3.9,2.05,0.6,0.25,9,"#2a2f36"); const p=iso(4.2,2.2); px("#7fd4ff",p.x-4,p.y-19,7,5); }); // monitor
-  addF(0.9+4.6, ()=>{ cbox(0.25,3.6,1.1,2.1,8,"#3f73a8"); cbox(0.25,3.6,1.1,0.5,11,"#e9eef2"); }); // exam couch
-  addF(6.3+4.6, ()=>plant(6.3,4.6));
-  addF(3.6+3.75, ()=>chair(3.25,3.4,"#7b3d5a"));            // patient chair GP
-  addF(3.6+1.1, ()=>chair(3.3,1.1,"#2c3e50"));              // GP chair
-  // Nurse room
-  addF(8.6+0.45, ()=>cbox(7.9,0.15,1.3,0.5,26,"#9fb3c2"));   // cabinet
-  addF(13.1+0.5, ()=>{ cbox(12.6,0.15,1,0.7,26,"#f4f6f7"); const p=iso(13.1,0.85); px("#9aa",p.x+2,p.y-20,1,6); }); // vaccine fridge
-  addF(10.6+2.35, ()=>cbox(9.5,1.95,2.2,0.8,11,"#a7c4d6"));  // nurse desk
-  addF(12.4+2.6, ()=>{ cbox(12.1,2.3,0.7,0.6,13,"#c9d3da"); const p=iso(12.45,2.6); px("#e74c3c",p.x-3,p.y-16,3,2); px("#3498db",p.x+1,p.y-17,3,2); }); // trolley
-  addF(13+4.4, ()=>{ cbox(12.7,4.1,0.6,0.6,4,"#ecf0f1"); const p=iso(13,4.4); px("#34495e",p.x-6,p.y-24,1,20); px("#34495e",p.x-8,p.y-25,5,2);}); // scale
-  addF(10.6+3.75, ()=>chair(10.25,3.4,"#2f6fb3"));
-  addF(10.6+1.1, ()=>chair(10.3,1.1,"#2c3e50"));
-  addF(8.2+4.4, ()=>plant(8.2,4.4));
-  // Waiting room
+  // interior partition: front of rooms along gy=6, doorways at x=3 and x=10
+  for(let x=0;x<GW;x++){ if(x===3||x===10) continue; const col = x<7 ? "#d9c49a" : "#b9d3e6";
+    addF(x+0.5+6-0.05, ()=>box(x,5.88,1,0.14,14,"#f2ecdc",shade(col,.88),shade(col,.68))); }
+  for(let y=0;y<6;y++) addF(7+y+0.5-0.05, ()=>box(6.88,y,0.14,1,14,"#f2ecdc","#c7b78f","#9fb6c8"));
+  for(const x of [3,10]){ addF(x+6.05, ()=>{ box(x-.06,5.84,.12,.2,18,"#6b4426","#5a3b20","#43301c"); box(x+.94,5.84,.12,.2,18,"#6b4426","#5a3b20","#43301c"); }); }
+  // exterior low walls (cutaway) along the front (gy=12) and right side (gx=14), entrance at x=1
+  for(let x=0;x<GW;x++){ if(x===1) continue; addF(x+.5+12-.02, ()=>{ box(x,11.86,1,.16,10,"#efe4cf","#c46e4b","#a35a3c"); for(const h of [3.3,6.6]) line(up(iso(x,12.02),h), up(iso(x+1,12.02),h), "rgba(80,30,15,.35)"); }); }
+  for(let y=0;y<GH;y++) addF(14+y+.5-.02, ()=>{ box(13.86,y,.16,1,10,"#efe4cf","#c46e4b","#a35a3c"); for(const h of [3.3,6.6]) line(up(iso(14.02,y),h), up(iso(14.02,y+1),h), "rgba(80,30,15,.35)"); });
+  // entrance portal
+  addF(1+12.6, (t)=>{ box(.9,11.8,.14,.28,30,"#2f8f5b","#24724a","#1c5a3a"); box(1.96,11.8,.14,.28,30,"#2f8f5b","#24724a","#1c5a3a");
+    box(.9,11.8,1.2,.28,6,"#38a86b","#2b8656","#1f6643",undefined,26);
+    const a=up(iso(1.5,12.08),29); px("#ffffff",a.x-5,a.y-1,10,2); px("#ffffff",a.x-1,a.y-3,2,6); });
+  // ---- GP office ----
+  addF(1.4, ()=>{ cbox(0.15,0.15,1.3,0.5,32,"#6d4a2c");
+    for(let s=0;s<4;s++){ const h0=3+s*7.5; faceL(.15,.15,.5,.05,1.25,h0-1,h0,"#4a311c"); let u=.1; let j=0; while(u<1.15){ const bw=.07+h2(s,j)*.06; faceL(.15,.15,.5,u,u+bw,h0,h0+4+h2(j,s)*2,["#c0392b","#2e86c1","#f1c40f","#27ae60","#8e44ad","#e67e22"][(s+j)%6]); u+=bw+.015; j++; } } });
+  addF(2.5, ()=>{ shadowBox(.12,1.6,.6,.9); cbox(.12,1.6,.6,.9,12,"#e8eef1"); const p=up(iso(.42,2.05),12); ctx.fillStyle="#9fb3bf"; ctx.beginPath(); ctx.ellipse(p.x,p.y,5,2.5,0,0,7); ctx.fill(); px("#c0c6c9",p.x-6,p.y-6,1,5); px("#c0c6c9",p.x-6,p.y-6,3,1); });
+  addF(5.6, (t)=>{ shadowBox(2.4,1.95,2.3,.85); cbox(2.45,2.0,.45,.75,10,"#7a4e2b"); cbox(4.2,2.0,.45,.75,10,"#7a4e2b");
+    faceL(2.45,2.0,.75,.05,.4,4,5,"#d9b26a"); faceL(4.2,2.0,.75,.05,.4,4,5,"#d9b26a"); faceL(2.45,2.0,.75,.05,.4,7.5,8.5,"#d9b26a");
+    box(2.9,2.6,1.3,.12,9,"#6b4426","#5e3b20","#4a2f1b");
+    cbox(2.38,1.92,2.4,.92,2.5,"#9b6a3e",9.5);
+    topQuad(3.25,2.15,.7,.35,12.1,"#2d3238"); for(let i=0;i<5;i++) topQuad(3.3+i*.13,2.2,.08,.08,12.3,"#5c6670");
+    topQuad(4.05,2.25,.45,.5,12.1,"#fafafa"); topQuad(4.1,2.35,.35,.06,12.2,"#bbb"); topQuad(4.1,2.5,.3,.06,12.2,"#bbb");
+    cbox(2.6,2.15,.18,.5,1.5,"#2a2f36",12); box(2.66,2.35,.06,.1,4,"#2a2f36","#22262b","#1c1f23",undefined,13.5);
+    cbox(2.55,2.05,.12,.7,10,"#2a2f36",17);
+    const ai = staffState.GP.ai, glow = ai ? (Math.sin(t*8)>0?"#b7abff":"#9b8cff") : "#7fd4ff";
+    faceR(2.55,2.05,.12,.08,.62,1.5,8.5,glow,17); if(!ai){ for(let k=0;k<3;k++) faceR(2.55,2.05,.12,.15,.5-k*.1,6.5-k*1.8,7.2-k*1.8,"#2e86c1",17); }
+    const m=up(iso(4.55,2.65),12); px("#ffffff",m.x,m.y-4,3,4); px("#e74c3c",m.x,m.y-3,3,1); });
+  addF(5.45, ()=>{ shadowBox(.25,3.6,1.1,2.1); cbox(.25,3.6,1.1,2.1,6,"#d7dde1"); cbox(.25,3.6,1.1,2.1,3,"#3f78b5",6); topQuad(.45,3.6,.7,2.1,9.05,"#f4f6f7"); cbox(.32,3.65,.96,.45,2,"#ffffff",9); });
+  addF(6.3+4.6, ()=>plant(6.25,4.6,true));
+  addF(7.1, ()=>chair(3.25,3.3,"#8e3b5e",true));
+  addF(4.7, ()=>officeChair(3.3,1.0,"#2c3e50"));
+  addF(1.3, (t)=>wallClock(6.5,0,t));
+  // ---- Nurse room ----
+  addF(8.6+0.45, ()=>{ shadowBox(7.95,.15,1.3,.5); cbox(7.95,.15,1.3,.5,28,"#a7b9c6"); faceL(7.95,.15,.5,.64,.66,1,27,"#6b7f8c"); faceL(7.95,.15,.5,.5,.56,13,15,"#e3e8eb"); faceL(7.95,.15,.5,.74,.8,13,15,"#e3e8eb"); faceL(7.95,.15,.5,.02,1.28,14,14.6,"#6b7f8c"); });
+  addF(13.1+0.5, (t)=>{ shadowBox(12.6,.15,1,.7); cbox(12.6,.15,1,.7,28,"#f4f6f7"); faceL(12.6,.15,.7,.05,.95,2,26,"#dfe8ec"); faceL(12.6,.15,.7,.1,.9,4,24,"rgba(120,190,230,.45)");
+    for(const h of [9,15,21]) faceL(12.6,.15,.7,.1,.9,h,h+.6,"#aab"); faceL(12.6,.15,.7,.86,.9,10,18,"#8a99a3");
+    const d=up(iso(12.75,.85),25); px("#0b2a16",d.x-1,d.y-1,6,3); px(Math.sin(t*2)>0?"#5cc98a":"#3fa36d",d.x,d.y,4,1); });
+  addF(12.6, (t)=>{ shadowBox(9.5,1.95,2.2,.8); cbox(9.55,2.0,2.1,.75,10,"#8fb2c8"); faceL(9.55,2.0,.75,.15,.55,6,7,"#e8f1f6"); faceL(9.55,2.0,.75,1.55,1.95,6,7,"#e8f1f6");
+    cbox(9.48,1.92,2.24,.9,2.5,"#cfe0ea",9.5);
+    topQuad(10.3,2.15,.65,.33,12.1,"#2d3238"); topQuad(11.05,2.25,.4,.45,12.1,"#fafafa");
+    cbox(9.6,2.05,.12,.7,10,"#2a2f36",14); box(9.62,2.3,.08,.15,2.5,"#2a2f36","#22262b","#1c1f23",undefined,12);
+    const ai = staffState.Nurse.ai, glow = ai ? (Math.sin(t*8)>0?"#b7abff":"#9b8cff") : "#7fd4ff";
+    faceR(9.6,2.05,.12,.08,.62,1.5,8.5,glow,14); });
+  addF(12.4+2.6, ()=>{ shadowBox(12.1,2.3,.7,.6,.15); for(const [a,b] of [[0,0],[.62,0],[0,.52],[.62,.52]]) box(12.1+a,2.3+b,.08,.08,13,"#9aa7ae","#7e8a90","#6c767b");
+    cbox(12.1,2.3,.7,.6,1.2,"#d5dde2",3); cbox(12.1,2.3,.7,.6,1.2,"#e5ecf0",12);
+    const p=up(iso(12.45,2.6),13); px("#e74c3c",p.x-5,p.y-3,4,3); px("#3498db",p.x+1,p.y-4,3,4); px("#ffffff",p.x-1,p.y-2,2,2); });
+  addF(13+4.4, ()=>{ cbox(12.7,4.1,.6,.6,3,"#ecf0f1"); const p=up(iso(13.05,4.25),3); px("#34495e",p.x-1,p.y-24,2,24); px("#2c3e50",p.x-4,p.y-26,9,3); px("#7fd4ff",p.x-3,p.y-25,4,1); });
+  addF(14.1, ()=>chair(10.25,3.3,"#2f6fb3",true));
+  addF(11.7, ()=>officeChair(10.3,1.0,"#2c3e50"));
+  addF(8.2+4.4, ()=>plant(8.15,4.4,false));
+  addF(12.5, (t)=>wallClock(8.6,0,t));
+  // ---- Waiting room ----
   for(const s of SEATS) addF(s.gx+s.gy-0.02, ()=>bench(s.gx-0.5,s.gy-0.35));
-  addF(12.45+8.45, ()=>{ cbox(12.2,8.2,0.5,0.5,14,"#dde6ea"); const p=iso(12.45,8.45); px("#5dade2",p.x-3,p.y-24,6,8); px("#2e86c1",p.x-3,p.y-18,6,2); }); // water cooler
-  addF(13.5+9.75, ()=>{ cbox(13,9.2,0.95,1.1,30,"#c0392b"); const p=iso(13.95,9.6); px("#f9e79f",p.x-1,p.y-26,4,12); }); // vending
-  addF(11.5+10.5, ()=>{ cbox(11,10,1,1,6,"#8e6b47"); const p=iso(11.5,10.5); px("#e74c3c",p.x-5,p.y-9,5,3); px("#f4d03f",p.x+1,p.y-8,5,3); }); // magazines
-  addF(0.6+11.4, ()=>plant(0.4,11.3));
-  addF(9.9+11.4, ()=>plant(9.6,11.3));
-  addF(13.4+11.3, ()=>plant(13.2,11.2));
+  addF(12.45+8.45, ()=>{ shadowBox(12.2,8.2,.5,.5); cbox(12.2,8.2,.5,.5,13,"#dfe6ea"); faceL(12.2,8.2,.5,.1,.4,6,9,"#9aa7ae");
+    ctx.globalAlpha=.8; cbox(12.27,8.27,.36,.36,10,"#5dade2",13); ctx.globalAlpha=1; const p=up(iso(12.45,8.45),23); px("#ffffff",p.x-2,p.y-6,2,3); });
+  addF(13.5+9.75, (t)=>{ shadowBox(13,9.2,.85,1.1); cbox(13,9.2,.85,1.1,32,"#c0392b"); faceR(13,9.2,.85,.12,.98,8,30,"#1d2b33");
+    for(let r=0;r<5;r++) for(let c=0;c<4;c++) faceR(13,9.2,.85,.18+c*.2,.3+c*.2,11+r*3.8,13+r*3.8,["#f1c40f","#2ecc71","#e67e22","#3498db","#e84393"][(r+c)%5]);
+    faceR(13,9.2,.85,.2,.9,2.5,5.5,"#111"); faceL(13,9.2,1.1,.1,.75,22,27,"#f5f5f5"); faceL(13,9.2,1.1,.2,.65,23.5,25.5,"#c0392b"); });
+  addF(11.5+10.5, ()=>{ shadowBox(11,10,1,1); for(const [a,b] of [[.05,.05],[.85,.05],[.05,.85],[.85,.85]]) box(11+a,10+b,.1,.1,5,"#6b4c33","#5a3f2a","#4a3322");
+    cbox(11,10,1,1,1.5,"#9b7652",5); topQuad(11.15,10.15,.35,.45,6.6,"#e74c3c"); topQuad(11.55,10.4,.35,.4,6.6,"#f4d03f"); topQuad(11.2,10.6,.3,.3,6.6,"#3498db"); });
+  addF(8.9, (t)=>tvScreen(t));
+  addF(0.6+11.4, ()=>plant(0.15,10.9,true));
+  addF(9.9+11.4, ()=>plant(9.6,11.25,false));
+  addF(13.4+11.3, ()=>plant(13.2,11.2,true));
+  // ---- outdoors (in front of the building) ----
+  for(const [gx,gy,s] of [[16.4,3.5,1],[16.8,9.2,1.15],[7.6,16.4,1.05],[12.5,15.4,1.15],[-1.2,13.4,1],[16.6,13.6,1]]) addF(gx+gy, ()=>tree(gx,gy,s));
+  for(let x=3.4;x<13.5;x+=1.6) addF(x+13.6, ()=>bush(x,13.6));
+  for(let y=1;y<11.5;y+=2.2) addF(14.8+y, ()=>bush(14.8,y));
+  addF(2.6+15.4, ()=>{ box(2.45,15.3,.1,.1,20,"#5a3b20","#4a2f1b","#3a2414"); box(5.55,15.3,.1,.1,20,"#5a3b20","#4a2f1b","#3a2414");
+    poly([up(iso(2.3,15.4),11),up(iso(5.8,15.4),11),up(iso(5.8,15.4),23),up(iso(2.3,15.4),23)], "#2c4860", "#f5c842");
+    const m=iso(4.05,15.4); ctx.save(); ctx.translate(m.x,m.y-15.5); ctx.transform(1,0.5,0,1,0,0); ctx.fillStyle="#f5c842"; ctx.font="bold 5px monospace"; ctx.textAlign="center"; ctx.fillText("MORNING SURGERY",0,0); ctx.fillStyle="#eef0e2"; ctx.font="4px monospace"; ctx.fillText("GP · NURSE · OPEN 8-6",0,5); ctx.restore(); });
+  addF(0.4+13.3, (t)=>{ const p=iso(.4,13.3); ctx.fillStyle="rgba(0,0,0,.2)"; ctx.beginPath(); ctx.ellipse(p.x,p.y,4,1.6,0,0,7); ctx.fill();
+    px("#2c3e50",p.x-1,p.y-40,2,40); px("#2c3e50",p.x-4,p.y-44,8,4); px("#ffe9a8",p.x-3,p.y-41,6,2);
+    const g=ctx.createRadialGradient(p.x,p.y-40,1,p.x,p.y-40,14); g.addColorStop(0,"rgba(255,233,168,.35)"); g.addColorStop(1,"rgba(255,233,168,0)"); ctx.fillStyle=g; ctx.fillRect(p.x-14,p.y-54,28,28); });
+  addF(7.8+16.6, (t)=>van(6.6,16.1,t));
 })();
-function chair(gx,gy,col){ cbox(gx,gy,0.7,0.6,5,col); cbox(gx,gy,0.7,0.12,12,col); }
-function bench(gx,gy){ cbox(gx,gy,1,0.7,5,"#e2a93b"); cbox(gx,gy+0.55,1,0.15,11,"#c98b22"); }
-function plant(gx,gy){ cbox(gx,gy,0.45,0.45,6,"#b55d32"); const p=iso(gx+0.22,gy+0.22);
-  for(const [dx,dy,r,c] of [[0,-14,5,"#2e8b57"],[-3,-10,4,"#3cb371"],[3,-11,4,"#228b22"],[0,-18,3,"#3cb371"]]){ ctx.fillStyle=c; ctx.beginPath(); ctx.arc(p.x+dx,p.y+dy,r,0,7); ctx.fill(); } }
+function chair(gx,gy,col,backFront){ shadowBox(gx,gy,.7,.6,.15);
+  for(const [a,b] of [[.05,.05],[.58,.05],[.05,.48],[.58,.48]]) box(gx+a,gy+b,.07,.07,4,"#555","#444","#333");
+  cbox(gx,gy,.7,.6,2,col,4); if(backFront) cbox(gx,gy+.48,.7,.12,9,col,4); else cbox(gx,gy,.7,.12,9,col,4); }
+function officeChair(gx,gy,col){ const p=iso(gx+.35,gy+.3); px("#222",p.x-4,p.y-1,8,1); px("#333",p.x-1,p.y-5,2,5);
+  cbox(gx,gy,.7,.6,2,col,5); cbox(gx,gy,.7,.14,10,col,6); }
+function bench(gx,gy){ shadowBox(gx,gy,1,.7,.14);
+  for(const a of [.08,.84]) for(const b of [.1,.55]) box(gx+a,gy+b,.08,.08,4,"#4a4a4a","#3a3a3a","#2a2a2a");
+  cbox(gx,gy,1,.7,1.8,"#e0a53a",4); for(const b of [.24,.47]) line(up(iso(gx,gy+b),5.8), up(iso(gx+1,gy+b),5.8), "rgba(100,60,10,.45)");
+  cbox(gx,gy,1,.13,8,"#d4952a",5.8); line(up(iso(gx,gy+.13),10), up(iso(gx+1,gy+.13),10), "rgba(100,60,10,.45)"); }
+function plant(gx,gy,tall){ shadowBox(gx,gy,.45,.45,.15); cbox(gx,gy,.45,.45,7,"#b55d32"); cbox(gx-.03,gy-.03,.51,.51,1.5,"#c96f43",7);
+  const p=iso(gx+.22,gy+.22), x=p.x, y=p.y-8; ctx.fillStyle="#3b2a1e"; ctx.beginPath(); ctx.ellipse(x,y,5,2,0,0,7); ctx.fill();
+  const leaves = tall ? [[-6,-10,3,9,-.5,"#2e8b57"],[6,-11,3,9,.5,"#2e8b57"],[-3,-16,3,10,-.2,"#3cb371"],[3,-17,3,10,.25,"#3cb371"],[0,-21,2.5,9,0,"#57c785"],[-8,-6,2.5,6,-1,"#267a4a"],[8,-6,2.5,6,1,"#267a4a"]]
+                      : [[-4,-6,5,4,0,"#2e8b57"],[4,-7,5,4,0,"#2e8b57"],[0,-10,6,5,0,"#3cb371"],[-2,-13,3,3,0,"#57c785"],[3,-12,2,2,0,"#57c785"]];
+  for(const [dx,dy,rx,ry,rot,c] of leaves){ ctx.fillStyle=c; ctx.beginPath(); ctx.ellipse(x+dx,y+dy,rx,ry,rot,0,7); ctx.fill(); }
+  if(!tall){ px("#e84393",x-3,y-11,2,2); px("#f5c842",x+3,y-9,2,2); } }
+function bush(gx,gy){ const p=iso(gx,gy); ctx.fillStyle="rgba(0,0,0,.18)"; ctx.beginPath(); ctx.ellipse(p.x+2,p.y+1,8,3,0,0,7); ctx.fill();
+  for(const [dx,dy,rx,ry,c] of [[0,-5,8,5,"#2d6a2d"],[-3,-8,5,4,"#3a8236"],[3,-8,5,4,"#3a8236"],[0,-10,4,3,"#4fa046"]]){ ctx.fillStyle=c; ctx.beginPath(); ctx.ellipse(p.x+dx,p.y+dy,rx,ry,0,0,7); ctx.fill(); }
+  px("#f5f5f5",p.x-4,p.y-8,1,1); px("#f4d03f",p.x+3,p.y-10,1,1); px("#e84393",p.x+1,p.y-6,1,1); }
+function wallClock(gx,gy,t){ const p=up(iso(gx,.02),33); ctx.fillStyle="#1b1b1b"; ctx.beginPath(); ctx.arc(p.x,p.y,5,0,7); ctx.fill();
+  ctx.fillStyle="#fbfaf4"; ctx.beginPath(); ctx.arc(p.x,p.y,4.2,0,7); ctx.fill();
+  const m=gameClock%60, h=(gameClock/60)%12; const am=m/60*Math.PI*2-Math.PI/2, ah=h/12*Math.PI*2-Math.PI/2;
+  line(p,{x:p.x+Math.cos(ah)*2.4,y:p.y+Math.sin(ah)*2.4},"#1b1b1b",1.1); line(p,{x:p.x+Math.cos(am)*3.4,y:p.y+Math.sin(am)*3.4},"#c0392b",.8); }
+function tvScreen(t){ // wall TV above the notice board in the waiting room
+  poly(qY(8.2,10.0,35,44,.03), "#151a1f", "#000");
+  const hue = (t*20)%360; poly(qY(8.3,9.9,36,43,.035), `hsl(${hue},45%,42%)`);
+  const k = Math.floor(t*1.2)%3; const s = qY(8.5,8.9,37.5,41.5,.04);
+  if(k===0){ poly(qY(8.62,8.78,37.5,41.5,.04),"#fff"); poly(qY(8.5,8.9,38.8,40.2,.04),"#fff"); }
+  else if(k===1){ poly(s,"#f5c842"); }
+  else { poly(qY(8.5,8.7,38,41,.04),"#5cc98a"); poly(qY(8.7,8.9,37.5,40,.04),"#9b8cff"); }
+  for(let i=0;i<3;i++) poly(qY(9.05,9.75-i*.15,40.8-i*1.6,41.5-i*1.6,.04),"rgba(255,255,255,.85)"); }
+function van(gx,gy,t){ const L=2.6, D=1.1;
+  ctx.fillStyle="rgba(0,0,0,.25)"; poly([iso(gx,gy),iso(gx+L+.25,gy),iso(gx+L+.25,gy+D+.25),iso(gx,gy+D+.25)],"rgba(0,0,0,.25)");
+  box(gx,gy,L,D,16,"#f7f7f3","#dcdcd6","#c4c4bd",undefined,3);
+  faceL(gx,gy,D,0,L,8,10,"#d63a2f",3); faceL(gx,gy,D,.7,1.0,12,16,"#d63a2f",3); faceL(gx,gy,D,.55,1.15,13.3,14.7,"#d63a2f",3);
+  faceR(gx,gy,L,.1,1.0,11,15.5,"#7fb7d9",3); faceL(gx,gy,D,2.05,2.5,11,15.5,"#7fb7d9",3);
+  for(const u of [.5,2.1]){ const w=iso(gx+u,gy+D); ctx.fillStyle="#1b1b1b"; ctx.beginPath(); ctx.ellipse(w.x,w.y-2,3.2,3,0,0,7); ctx.fill(); px("#888",w.x-1,w.y-3,2,2); }
+  const on = Math.sin(t*9)>0; box(gx+1,gy+.35,.5,.4,2,on?"#5dade2":"#1f4e79",on?"#2e86c1":"#163a5a",on?"#2471a3":"#123049",undefined,19);
+  if(on){ const p=up(iso(gx+1.25,gy+.55),22); const g=ctx.createRadialGradient(p.x,p.y,1,p.x,p.y,12); g.addColorStop(0,"rgba(93,173,226,.5)"); g.addColorStop(1,"rgba(93,173,226,0)"); ctx.fillStyle=g; ctx.fillRect(p.x-12,p.y-12,24,24); } }
 
 /* ================= Characters ================= */
 const SKIN = ["#f1c9a5","#e0ac69","#c68642","#8d5524","#f5d6c6","#d9a066"];
@@ -595,60 +895,114 @@ const SHIRT = ["#e74c3c","#3498db","#9b59b6","#f39c12","#16a085","#d35400","#2c3
 const PANTS = ["#2c3e50","#34495e","#5d4037","#1f3a5f","#4a4a4a","#6d4c41"];
 const HAIR = ["#2b1b10","#5a3825","#a0522d","#e5c07b","#111111","#7a4b2a"];
 function lookFor(sc){
-  const r = mulberry(hash(sc.name));
-  const old = sc.age >= 60;
+  const r = mulberry(hash(sc.name)); const old = sc.age >= 60;
+  const style = sc.sex==="F" ? (old ? "bun" : pick(["long","pony","long","bob"],r)) : (old ? (r()>.5?"bald":"short") : pick(["short","spiky","short"],r));
   return { skin: pick(SKIN,r), shirt: pick(SHIRT,r), pants: pick(PANTS,r), shoe:"#1b1b1b",
-           hair: old ? (r()>.5?"#d5d5d5":"#a9a9a9") : pick(HAIR,r), long: sc.sex==="F", coat:false };
+    hair: old ? (r()>.5?"#d5d5d5":"#a9a9a9") : pick(HAIR,r), style, long: ["long","pony","bun","bob"].includes(style),
+    glasses: (old && r()>.35) || r()>.88, stripes: r()>.7, stick: sc.age>=70, child: !!sc.child };
 }
-const GP_LOOK = {skin:"#f1c9a5",shirt:"#f7f7f2",pants:"#2c3e50",shoe:"#1b1b1b",hair:"#5a3825",long:false,coat:true,steth:true};
-const NURSE_LOOK = {skin:"#c68642",shirt:"#2f6fd6",pants:"#2f6fd6",shoe:"#ffffff",hair:"#111111",long:true,cap:true};
+const GP_LOOK = {skin:"#f1c9a5",shirt:"#f7f7f2",pants:"#2c3e50",shoe:"#1b1b1b",hair:"#5a3825",style:"short",coat:true,steth:true,glasses:true};
+const NURSE_LOOK = {skin:"#c68642",shirt:"#2f6fd6",pants:"#2f6fd6",shoe:"#f2f2f2",hair:"#111111",style:"bun",long:true,cap:true,watch:true};
 function hash(s){ let h=2166136261; for(const c of s){ h^=c.charCodeAt(0); h=Math.imul(h,16777619);} return h>>>0; }
 function mulberry(a){ return ()=>{ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
 const pick = (arr,r) => arr[Math.floor(r()*arr.length)];
 
 function personParts(c, L, x, by, o){
   const C = k => c || L[k];
-  const sit = o.sitting, a = o.moving ? Math.round(Math.sin(o.t*12)*1.5) : 0;
-  if(sit){ px(C("pants"),x-3,by-4,7,3); px(C("pants"),x+2,by-4,2,5); px(C("shoe"),x+2,by,3,1); }
-  else { px(C("pants"),x-3,by-7,2,7-Math.max(0,a)); px(C("pants"),x+1,by-7,2,7-Math.max(0,-a));
-         px(C("shoe"),x-3,by-1-Math.max(0,a),2,1); px(C("shoe"),x+1,by-1-Math.max(0,-a),2,1); }
-  px(C("shirt"),x-4,by-16,8,9);
-  if(L.coat && !sit) px(C("shirt"),x-4,by-8,8,3);
-  px(C("shirt"),x-5,by-15,1,6); px(C("shirt"),x+4,by-15,1,6);
-  px(C("skin"),x-5,by-9,1,1); px(C("skin"),x+4,by-9,1,1);
-  px(C("skin"),x-3,by-22,6,6);
-  px(C("hair"),x-3,by-23,6,2);
-  if(L.long){ px(C("hair"),x-4,by-22,1,6); px(C("hair"),x+3,by-22,1,6); } else px(C("hair"),x-3,by-21,1,2);
+  const sit = o.sitting, ph = o.t*10, a = o.moving ? Math.round(Math.sin(ph)*2) : 0;
+  if(sit){ px(C("pants"),x-4,by-5,9,3); px(C("pants"),x-4,by-3,3,3); px(C("pants"),x+2,by-3,3,3); px(C("shoe"),x-5,by,4,1); px(C("shoe"),x+2,by,4,1); }
+  else { const l=Math.max(0,a), r=Math.max(0,-a);
+    px(C("pants"),x-3,by-9,3,9-l); px(C("pants"),x+1,by-9,3,9-r); px(C("shoe"),x-4,by-1-l,4,2); px(C("shoe"),x+1,by-1-r,4,2); }
+  const ty = by - (sit ? 15 : 19);
+  px(C("shirt"),x-4,ty,9,10);
+  if(L.coat && !sit) px(C("shirt"),x-4,ty+10,9,4);
+  const sw = o.moving ? Math.round(Math.sin(ph)*1.5) : o.typing ? (Math.sin(o.t*14)>0?1:0) : 0;
+  px(C("shirt"),x-6,ty+1+sw,2,7); px(C("shirt"),x+5,ty+1-sw,2,7);
+  px(C("skin"),x-6,ty+8+sw,2,2); px(C("skin"),x+5,ty+8-sw,2,2);
+  px(C("skin"),x-1,ty-1,3,1);
+  px(C("skin"),x-3,ty-8,7,7);
+  const hc = C("hair");
+  if(L.style!=="bald") px(hc,x-3,ty-9,7,2); else { px(hc,x-3,ty-6,1,3); px(hc,x+3,ty-6,1,3); }
+  if(L.style==="short"){ px(hc,x-3,ty-7,1,2); px(hc,x+3,ty-7,1,1); }
+  if(L.style==="spiky"){ px(hc,x-3,ty-10,1,1); px(hc,x-1,ty-10,1,1); px(hc,x+1,ty-10,1,1); px(hc,x+3,ty-10,1,1); px(hc,x-3,ty-7,1,2); }
+  if(L.style==="long"){ px(hc,x-4,ty-8,1,9); px(hc,x+4,ty-8,1,9); }
+  if(L.style==="bob"){ px(hc,x-4,ty-8,1,6); px(hc,x+4,ty-8,1,6); px(hc,x-3,ty-7,1,1); }
+  if(L.style==="pony"){ px(hc,x-3,ty-7,1,2); px(hc,x+4,ty-7,2,2); px(hc,x+5,ty-5,1,5); }
+  if(L.style==="bun"){ px(hc,x-1,ty-11,3,2); px(hc,x-3,ty-7,1,2); px(hc,x+3,ty-7,1,2); }
 }
 function drawPerson(gx,gy,L,o){
   const p = iso(gx,gy); const x=Math.round(p.x), y=Math.round(p.y);
   ctx.globalAlpha = o.alpha ?? 1;
-  ctx.fillStyle="rgba(0,0,0,.3)"; ctx.beginPath(); ctx.ellipse(x,y,6,2.5,0,0,7); ctx.fill();
-  if(o.selected){ const k=(Math.sin(o.t*6)+1)/2; ctx.strokeStyle=`rgba(245,200,66,${0.5+k*0.5})`; ctx.lineWidth=1.5;
-    ctx.beginPath(); ctx.moveTo(x-10,y); ctx.lineTo(x,y-5); ctx.lineTo(x+10,y); ctx.lineTo(x,y+5); ctx.closePath(); ctx.stroke(); ctx.lineWidth=1; }
-  const lift = o.sitting?4:0, bob = (o.moving && Math.sin(o.t*12)>0)?1:0;
-  const by = y - lift - bob;
-  for(const [dx,dy] of [[-1,0],[1,0],[0,-1],[0,1]]) personParts("#10161c", L, x+dx, by+dy, o);
+  ctx.fillStyle="rgba(0,0,0,.28)"; ctx.beginPath(); ctx.ellipse(x,y,7,2.6,0,0,7); ctx.fill();
+  if(o.selected){ ctx.save(); ctx.strokeStyle="#f5c842"; ctx.lineWidth=1.4; ctx.setLineDash([3,2]); ctx.lineDashOffset=-o.t*12;
+    ctx.beginPath(); ctx.ellipse(x,y,11,5,0,0,7); ctx.stroke(); ctx.restore(); }
+  const bob = (o.moving && Math.sin(o.t*10)>0) ? 1 : 0, by = y - bob;
+  const sil = "#10161c";
+  for(const [dx,dy] of [[-1,0],[1,0],[0,-1],[0,1]]) personParts(sil, L, x+dx, by+dy, o);
   personParts(null, L, x, by, o);
-  px("#1b1b1b",x-2,by-20,1,1); px("#1b1b1b",x+1,by-20,1,1);
-  if(L.steth){ px("#333",x-2,by-16,1,4); px("#333",x+1,by-16,1,4); px("#888",x-1,by-12,2,1); }
-  if(L.cap){ px("#ffffff",x-3,by-25,6,2); px("#e74c3c",x-1,by-25,2,1); }
-  if(L.coat){ px("#d0d0c8",x,by-16,1,9); }
+  const ty = by - (o.sitting ? 15 : 19), f = o.face>0 ? 1 : 0;
+  // shading and clothing details
+  px(shade(L.shirt,.8),x+2,ty+1,3,9);
+  if(L.stripes) for(const k of [2,5,8]) px(shade(L.shirt,1.25),x-4,ty+k,9,1);
+  if(L.coat){ px("#d6d6cc",x,ty,1,10); px("#d6d6cc",x-2,ty,1,3); px("#d6d6cc",x+2,ty,1,3); px("#5dade2",x+2,ty+4,2,1); }
+  if(L.steth){ px("#2b2b2b",x-2,ty,1,5); px("#2b2b2b",x+2,ty,1,5); px("#8a8a8a",x-1,ty+5,3,1); }
+  if(L.cap){ px("#ffffff",x-3,ty-11,7,2); px("#e3583f",x-1,ty-11,2,1); }
+  if(L.watch) px("#f0f0f0",x-3,ty+3,2,2);
+  // face
+  px("#1b1b1b",x-2+f,ty-5,1,2); px("#1b1b1b",x+1+f,ty-5,1,2);
+  if(L.glasses){ px("#2b2b2b",x-3+f,ty-5,3,1); px("#2b2b2b",x+f,ty-5,3,1); px("#9fd3ff",x-2+f,ty-4,1,1); }
+  const m = o.mood;
+  if(m==="happy"){ px("#8e2b2b",x-1+f,ty-2,3,1); px("#8e2b2b",x-2+f,ty-3,1,1); px("#8e2b2b",x+2+f,ty-3,1,1); px("#f5a3a3",x-3+f,ty-3,1,1); px("#f5a3a3",x+3,ty-3,1,1); }
+  else if(m==="annoyed"){ px("#8e2b2b",x-1+f,ty-2,3,1); px("#1b1b1b",x-2+f,ty-7,2,1); px("#1b1b1b",x+1+f,ty-7,2,1); }
+  else if(m==="worried"){ px("#8e2b2b",x+f,ty-2,1,1); px("#1b1b1b",x-2+f,ty-6,1,1); px("#1b1b1b",x+2+f,ty-6,1,1); }
+  else px(shade(L.skin,.75),x-1+f,ty-2,2,1);
+  if(L.stick && !o.sitting){ px("#6b4423",x+7,by-12,1,12); px("#6b4423",x+5,by-12,3,1); }
+  if(L.child){ const kx = x + (o.sitting ? 9 : 8), ky = y; drawKid(kx, ky, o, L); }
   ctx.globalAlpha = 1;
-  return {x, top: by-24, y};
+  return {x, top: ty-11, y};
+}
+function drawKid(x,y,o,L){
+  ctx.fillStyle="rgba(0,0,0,.25)"; ctx.beginPath(); ctx.ellipse(x,y,4,1.6,0,0,7); ctx.fill();
+  const a = o.moving ? (Math.sin(o.t*12)>0?1:0) : 0, by = y;
+  const part = (c,dx,dy)=>{ const C=k=>c||k; px(C("#3b6fb6"),x-2+dx,by-5+dy,2,5-a); px(C("#3b6fb6"),x+dx,by-5+dy,2,5-(1-a)); px(C("#f7d54a"),x-3+dx,by-11+dy,6,6); px(C(L.skin),x-2+dx,by-16+dy,5,5); px(C(L.hair),x-2+dx,by-17+dy,5,2); };
+  for(const [dx,dy] of [[-1,0],[1,0],[0,-1],[0,1]]) part("#10161c",dx,dy);
+  part(null,0,0); px("#1b1b1b",x-1,by-14,1,1); px("#1b1b1b",x+1,by-14,1,1); px("#e74c3c",x-1,by-9,4,1);
 }
 const URG_COL = {routine:"#4f7a96", soon:"#f0a03a", urgent:"#e3583f"};
+const P_QUESTION = [".XXX.","X...X","....X","..XX.","..X..",".....","..X.."];
+const P_HEART = [".XX.XX.","XXXXXXX","XXXXXXX",".XXXXX.","..XXX..","...X..."];
+const P_ANGRY = ["X..X..X",".X.X.X.","..XXX..","XXX.XXX","..XXX..",".X.X.X.","X..X..X"];
+const P_AI = [".X..XXX","X.X..X.","XXX..X.","X.X..X.","X.X.XXX"];
 function bubble(x,y,kind,t,col){
-  const bx=x-6, byy=y-12;
-  px("#10161c",bx-1,byy-1,14,12); px("#ffffff",bx,byy,12,10); px("#ffffff",x-1,byy+10,3,2); px("#10161c",x-2,byy+11,1,2);
-  ctx.textAlign="center"; ctx.font="bold 8px monospace";
-  if(kind==="!"){ px(col,bx+1,byy+1,10,8); ctx.fillStyle="#fff"; ctx.fillText("!",x,byy+8); }
-  else if(kind==="..."){ const n=Math.floor(t*3)%4; for(let i=0;i<3;i++) px(i<n?"#333":"#bbb",bx+2+i*3,byy+5,2,2); }
-  else if(kind==="heart"){ ctx.fillStyle="#e74c3c"; ctx.fillText("♥",x,byy+8); }
-  else if(kind==="angry"){ ctx.fillStyle="#c0392b"; ctx.fillText("#",x,byy+8); }
-  else if(kind==="ai"){ px("#9b8cff",bx+1,byy+1,10,8); ctx.fillStyle="#fff"; ctx.font="bold 6px monospace"; ctx.fillText("AI",x,byy+7); }
-  else if(kind==="?"){ px(col,bx+1,byy+1,10,8); ctx.fillStyle="#fff"; ctx.fillText("?",x,byy+8); }
+  x=Math.round(x); const w=15, h=12, bx=x-7, by=Math.round(y)-h-3;
+  const ol="#10161c";
+  px(ol,bx-1,by+1,w+2,h-2); px(ol,bx,by-1+1,w,h); px(ol,bx+1,by-1,w-2,h+2);
+  px(ol,x-1,by+h,3,2); px(ol,x,by+h+2,1,1);
+  const fill = (kind==="!"||kind==="?") ? col : kind==="ai" ? "#9b8cff" : "#ffffff";
+  px(fill,bx,by+1,w,h-2); px(fill,bx+1,by,w-2,h); px(fill,x,by+h,1,1);
+  const cx = x, cy = by + 2;
+  if(kind==="!"){ px("#ffffff",cx-1,cy,2,5); px("#ffffff",cx-1,cy+6,2,2); }
+  else if(kind==="?") pattern(P_QUESTION,cx-2,cy,"#ffffff");
+  else if(kind==="heart") pattern(P_HEART,cx-3,cy+1,"#e3583f");
+  else if(kind==="angry") pattern(P_ANGRY,cx-3,cy,"#e3583f");
+  else if(kind==="ai") pattern(P_AI,cx-3,cy+1,"#ffffff");
+  else if(kind==="..."){ const n=Math.floor(t*3)%4; for(let i=0;i<3;i++) px(i<n?"#333":"#c8c8c8",cx-5+i*4,cy+3,2,2); }
+  else if(kind==="happy"||kind==="calm"||kind==="worried"||kind==="annoyed"){
+    const fc = kind==="annoyed" ? "#f08a6a" : "#f5c842"; px(fc,cx-3,cy,7,8); px(fc,cx-4,cy+1,9,6);
+    px("#1b1b1b",cx-2,cy+2,1,2); px("#1b1b1b",cx+2,cy+2,1,2);
+    if(kind==="happy"){ px("#1b1b1b",cx-2,cy+5,1,1); px("#1b1b1b",cx-1,cy+6,3,1); px("#1b1b1b",cx+2,cy+5,1,1); }
+    else if(kind==="calm") px("#1b1b1b",cx-1,cy+6,3,1);
+    else if(kind==="worried"){ px("#1b1b1b",cx-1,cy+5,3,1); px("#1b1b1b",cx-2,cy+6,1,1); px("#1b1b1b",cx+2,cy+6,1,1); }
+    else { px("#1b1b1b",cx-2,cy+6,5,1); px("#1b1b1b",cx-3,cy+1,2,1); px("#1b1b1b",cx+2,cy+1,2,1); }
+  }
+  return by;
 }
+function patienceBar(x,by,v){ px("#10161c",x-8,by-6,17,5); px("#2b3a44",x-7,by-5,15,3);
+  px(v>50?"#5cc98a":v>25?"#f0a03a":"#e3583f",x-7,by-5,Math.max(0,Math.round(v/100*15)),3); px("rgba(255,255,255,.35)",x-7,by-5,Math.max(0,Math.round(v/100*15)),1); }
+function sparkle(x,y,t,i){ const a=t*3+i*2.1, r=10; const sx=x+Math.cos(a)*r, sy=y+Math.sin(a)*r*.5; const s=(Math.sin(t*6+i)+1)/2;
+  ctx.globalAlpha=.5+s*.5; px("#d9d2ff",sx,sy-1,1,3); px("#d9d2ff",sx-1,sy,3,1); ctx.globalAlpha=1; }
+const effects = [];
+function addEffect(gx,gy,text,col){ effects.push({gx,gy,text,col,t:0}); }
 
 /* ================= Game state ================= */
 let patients = [], uid = 0, selected = null, active = null, paused = true, started = false;
@@ -670,7 +1024,7 @@ function spawn(){
   const seat = freeSeat(); if(!seat) return false;
   const sc = nextScenario(); if(!sc) return false;
   const p = { id:++uid, sc, look:lookFor(sc), gx:DOOR_OUT.gx, gy:DOOR_OUT.gy, path:pathDoorToSeat(seat), state:"entering",
-    seat, patience:100, convo:[{who:"pt", text:sc.opening}], mood:"calm", staff:null, aiUsed:false, manualUsed:false,
+    seat, patience:100, convo:[{who:"pt", text:openingOf(sc)}], met:new Set(), mood:"calm", staff:null, aiUsed:false, manualUsed:false,
     start:null, consultTime:0, thinking:false, t:Math.random()*10, icon:null, iconT:0, postponed:0 };
   seat.occ = p.id; patients.push(p); renderQueue(); return true;
 }
@@ -693,7 +1047,7 @@ function update(dt){
     if(p.path.length){
       const tgt = p.path[0], dx = tgt.gx-p.gx, dy = tgt.gy-p.gy, dist = Math.hypot(dx,dy), step = 2.4*dt;
       if(dist <= step){ p.gx=tgt.gx; p.gy=tgt.gy; p.path.shift(); if(!p.path.length) arrive(p); }
-      else { p.gx += dx/dist*step; p.gy += dy/dist*step; }
+      else { p.gx += dx/dist*step; p.gy += dy/dist*step; const sdx = dx - dy; if(Math.abs(sdx)>0.05) p.face = sdx>0 ? 1 : -1; }
     }
   }
   patients = patients.filter(p=>!p.gone);
@@ -707,7 +1061,8 @@ function walkOut(p){
   if(p.seat){ p.seat.occ=null; }
   const from = p.seat; p.seat=null;
   p.icon="angry"; p.iconT=4; stats.walkouts++;
-  setPath(p, from ? pathSeatToDoor(from) : [{...DOOR_IN},{...DOOR_OUT}], "leaving");
+  setPath(p, from ? pathSeatToDoor(from) : [{...AISLE},{...DOOR_IN},{...DOOR_OUT}], "leaving");
+  addEffect(p.gx,p.gy,"WALKED OUT","#e3583f");
   if(selected===p){ selected=null; renderConsult(); }
   addLog(p, "Walked out", "No one saw them in time.");
   renderQueue(); renderStats();
@@ -723,29 +1078,34 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 function draw(t){
-  drawFloorAndWalls();
-  const items = FURN.slice();
-  // staff
-  for(const r of ["GP","Nurse"]){ const s=ROOMS[r].staff, look = r==="GP"?GP_LOOK:NURSE_LOOK;
-    items.push({depth:s.gx+s.gy+0.01, draw:()=>{ const h = drawPerson(s.gx,s.gy,look,{sitting:true,t}); if(staffState[r].ai) bubble(h.x,h.top-1,"ai",t); }}); }
+  if(!staticLayer) buildStatic();
+  ctx = mainCtx;
+  ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(staticLayer,0,0);
+  ctx.setTransform(RES,0,0,RES,0,0);
+  const items = FURN.map(f=>({depth:f.depth, draw:()=>f.draw(t)}));
+  for(const r of ["GP","Nurse"]){ const s=ROOMS[r].staff, look = r==="GP"?GP_LOOK:NURSE_LOOK, st=staffState[r];
+    items.push({depth:s.gx+s.gy+0.01, draw:()=>{
+      const h = drawPerson(s.gx,s.gy,look,{sitting:true,t,typing:st.ai||!st.busy,face:1,mood:st.busy?"calm":"happy"});
+      if(st.ai){ bubble(h.x,h.top,"ai",t); for(let i=0;i<3;i++) sparkle(h.x,h.top-4,t,i); } }}); }
   for(const p of patients){
     const sitting = p.path.length===0 && (p.state==="waiting"||p.state==="inRoom");
     items.push({depth:p.gx+p.gy+0.03, draw:()=>{
-      const alpha = Math.max(0, Math.min(1, (p.gx+0.9)/1.2));
-      const h = drawPerson(p.gx,p.gy,p.look,{sitting, moving:p.path.length>0, t:p.t, selected:p===selected, alpha});
-      if(alpha<0.5) return;
-      if(p.thinking) bubble(h.x,h.top-1,"...",t);
-      else if(p.icon) bubble(h.x,h.top-1,p.icon,t);
-      else if(p.state==="waiting"||p.state==="entering"){
-        bubble(h.x,h.top-1,"!",t,URG_COL[p.sc.urgency]);
-        const w=Math.max(0,Math.round(p.patience/10)); px("#10161c",h.x-6,h.top-16,12,3);
-        px(p.patience>50?"#5cc98a":p.patience>25?"#f0a03a":"#e3583f",h.x-5,h.top-15,w,1);
-      } else if(p.state==="inRoom" && p===active && !p.thinking) bubble(h.x,h.top-1,"?",t,"#4f7a96");
+      const alpha = Math.max(0, Math.min(1, (DOOR_OUT.gy+0.1-p.gy)/1.4));
+      const h = drawPerson(p.gx,p.gy,p.look,{sitting, moving:p.path.length>0, t:p.t, selected:p===selected, alpha, face:p.face||1, mood:p.mood});
+      if(alpha<0.6) return;
+      if(p.thinking) bubble(h.x,h.top,"...",t);
+      else if(p.icon) bubble(h.x,h.top,p.icon,t);
+      else if(p.state==="waiting"||p.state==="entering"){ const by=bubble(h.x,h.top,"!",t,URG_COL[p.sc.urgency]); patienceBar(h.x,by,p.patience); }
+      else if(p.state==="inRoom" && p===active) bubble(h.x,h.top,"?",t,"#4f7a96");
     }});
   }
   items.sort((a,b)=>a.depth-b.depth);
   for(const it of items) it.draw();
-  if(paused && started){ ctx.fillStyle="rgba(0,0,0,.45)"; ctx.fillRect(0,0,W,H); ctx.fillStyle="#f5c842"; ctx.font="bold 16px monospace"; ctx.textAlign="center"; ctx.fillText("PAUSED",W/2,H/2); }
+  for(let i=effects.length-1;i>=0;i--){ const e=effects[i]; e.t += 1/60; if(e.t>1.8){ effects.splice(i,1); continue; }
+    const p=iso(e.gx,e.gy); ctx.globalAlpha=Math.min(1,(1.8-e.t)*1.5); ctx.font="bold 9px monospace"; ctx.textAlign="center";
+    ctx.lineWidth=2.5; ctx.strokeStyle="#10161c"; ctx.strokeText(e.text,p.x,p.y-40-e.t*18); ctx.fillStyle=e.col; ctx.fillText(e.text,p.x,p.y-40-e.t*18); ctx.globalAlpha=1; }
+  const vg = ctx.createRadialGradient(W/2,H/2,H*0.35,W/2,H/2,H*0.85); vg.addColorStop(0,"rgba(0,0,0,0)"); vg.addColorStop(1,"rgba(0,0,0,.35)"); ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
+  if(paused && started){ ctx.fillStyle="rgba(0,0,0,.45)"; ctx.fillRect(0,0,W,H); ctx.fillStyle="#f5c842"; ctx.font="bold 18px monospace"; ctx.textAlign="center"; ctx.fillText("PAUSED",W/2,H/2); }
 }
 
 /* canvas picking */
@@ -753,7 +1113,7 @@ function canvasPoint(e){ const r=cv.getBoundingClientRect(); return {x:(e.client
 function hitPatient(pt){
   let best=null;
   for(const p of patients){ if(!(p.state==="waiting"||p.state==="entering"||p===active)) continue;
-    const s=iso(p.gx,p.gy); if(pt.x>s.x-7 && pt.x<s.x+7 && pt.y>s.y-36 && pt.y<s.y+3){ if(!best || p.gx+p.gy>best.gx+best.gy) best=p; } }
+    const s=iso(p.gx,p.gy); if(pt.x>s.x-9 && pt.x<s.x+9 && pt.y>s.y-40 && pt.y<s.y+4){ if(!best || p.gx+p.gy>best.gx+best.gy) best=p; } }
   return best;
 }
 cv.addEventListener("mousemove", e=>{ cv.style.cursor = hitPatient(canvasPoint(e)) ? "pointer" : "default"; });
@@ -793,7 +1153,7 @@ function renderQueue(){
     li.appendChild(avatarCanvas(p.look));
     const n=document.createElement("div"); n.className="qname"; n.innerHTML=`${esc(p.sc.name)} <small>${p.sc.age}${p.postponed?" · postponed":""}</small>`; li.appendChild(n);
     const t=document.createElement("div"); t.innerHTML=`<span class="tag ${p.sc.urgency}">${p.sc.urgency}</span>`; li.appendChild(t);
-    const r=document.createElement("div"); r.className="qreq"; r.textContent=p.convo.length>1 ? lastPatientLine(p) : p.sc.opening; li.appendChild(r);
+    const r=document.createElement("div"); r.className="qreq"; r.textContent=p.convo.length>1 ? lastPatientLine(p) : p.convo[0].text; li.appendChild(r);
     const b=document.createElement("div"); b.className="pbar"; b.innerHTML=`<i style="width:${Math.max(0,p.patience)}%"></i>`; li.appendChild(b);
     li.addEventListener("click",()=>selectPatient(p));
     li.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); selectPatient(p);} });
@@ -819,7 +1179,35 @@ function selectPatient(p){
 }
 
 /* consult panel */
-let pendingStaff = "GP", mode = "manual", draftIsAI = false, busy = false, lastError = "", summary = null;
+let pendingStaff = "GP", mode = "manual", busy = false, lastError = "", summary = null, showNeeds = false;
+let draftText = "", aiPromptText = "", draftIsAI = false, draftDoc = null, draftNotes = "", draftSource = "", includeDoc = true;
+const DOC_TYPES = ["prescription","sick_note","referral","test_order","letter","patient_leaflet","appointment","other"];
+function needsHTML(p){
+  const n = p.sc.needs, met = p.met;
+  const req = n.filter(x=>x.req), reqMet = req.filter(x=>met.has(x.id)).length;
+  return `<div class="needs well">
+    <div class="row"><b>${T_("What the patient needs","Ce are nevoie pacientul")}</b>
+      <span class="note">${reqMet}/${req.length} ${T_("essential met","esențiale rezolvate")}</span><span class="spacer"></span>
+      <button class="chip" id="needsToggle" type="button">${showNeeds?T_("Hide","Ascunde"):T_("Reveal","Arată")}</button></div>
+    <ul>${n.map(x=>{ const ok=met.has(x.id); return `<li class="${ok?"met":""}"><span class="mk">${ok?"✓":x.req?"●":"○"}</span>${ok||showNeeds?esc(needLabel(x)):"• • • • •"}${x.req?"":` <small>${T_("bonus","bonus")}</small>`}</li>`; }).join("")}</ul>
+  </div>`;
+}
+function docEditorHTML(dis){
+  if(!draftDoc) return "";
+  return `<div class="doced well">
+    <div class="row"><label class="check" for="incDoc"><input type="checkbox" id="incDoc" ${includeDoc?"checked":""} ${dis}> ${T_("Hand over this document","Înmânează acest document")}</label><span class="spacer"></span>
+      <select id="docType" ${dis}>${DOC_TYPES.map(t=>`<option value="${t}" ${draftDoc.type===t?"selected":""}>${esc(docLabel(t))}</option>`).join("")}</select></div>
+    <input type="text" id="docTitle" value="${esc(draftDoc.title)}" ${dis} aria-label="${T_("Document title","Titlul documentului")}">
+    <textarea id="docBody" class="${draftIsAI?"draft":""}" ${dis} aria-label="${T_("Document text","Textul documentului")}">${esc(draftDoc.body)}</textarea>
+  </div>`;
+}
+function saveInputs(){
+  const r=$("#reply"); if(r) draftText=r.value;
+  const a=$("#aiPrompt"); if(a) aiPromptText=a.value;
+  if(draftDoc){ const t=$("#docTitle"), b=$("#docBody"), ty=$("#docType"), inc=$("#incDoc");
+    if(t) draftDoc.title=t.value; if(b) draftDoc.body=b.value; if(ty) draftDoc.type=ty.value; if(inc) includeDoc=inc.checked; }
+}
+function clearDraft(){ draftText=""; draftIsAI=false; draftDoc=null; draftNotes=""; draftSource=""; includeDoc=true; }
 function renderConsult(){
   const el = $("#consult");
   if(summary && !selected){ el.innerHTML = summaryHTML(summary); el.querySelector("#sumNext")?.addEventListener("click",()=>{summary=null; renderConsult();}); return; }
@@ -829,7 +1217,7 @@ function renderConsult(){
       <p class="note">Tip: urgent and nearly-out-of-patience patients are listed first.</p>`;
     return;
   }
-  const p = selected, inConsult = p===active;
+  const p = selected, inConsult = p===active, first = p.sc.name.split(" ")[0];
   const staffLbl = s => s==="GP" ? "Dr (GP)" : "Nurse";
   const head = document.createElement("div"); head.className="who";
   head.appendChild(avatarCanvas(p.look,44));
@@ -837,15 +1225,18 @@ function renderConsult(){
     <div class="meta">${p.sc.age} years · <span class="tag ${p.sc.urgency}">${p.sc.urgency}</span> · suggested: <span class="tag ${p.sc.role==="GP"?"gp":"nurse"}">${staffLbl(p.sc.role)}</span>${inConsult?` · with <b>${staffLbl(p.staff)}</b>`:""}</div></div>`);
   el.innerHTML = "";
   el.appendChild(head);
-  el.insertAdjacentHTML("beforeend", `<div class="record well"><b>Record</b>${esc(p.sc.record)}</div>`);
+  el.insertAdjacentHTML("beforeend", `<div class="record well"><b>${T_("Record","Fișă")}</b>${esc(recordOf(p.sc))}</div>`);
+  if(inConsult) el.insertAdjacentHTML("beforeend", needsHTML(p));
   const tr = document.createElement("div"); tr.className="transcript well"; tr.id="transcript";
   for(const m of p.convo){
     if(m.who==="sys"){ tr.insertAdjacentHTML("beforeend", `<div class="msg sys">${esc(m.text)}</div>`); continue; }
-    const lbl = m.who==="pt" ? esc(p.sc.name.split(" ")[0]) : (p.staff==="GP"?"Doctor":"Nurse");
-    const tag = m.ai ? ` <span class="tag aitag">AI-assisted</span>` : "";
+    const tag = m.ai ? ` <span class="tag aitag">${m.src==="offline"?T_("offline script","text offline"):"AI-assisted"}</span>` : "";
+    if(m.who==="doc"){ tr.insertAdjacentHTML("beforeend", `<div class="msg doc"><div class="lbl">${esc(docLabel(m.doc.type))}${tag}</div><div class="doctitle">${esc(m.doc.title)}</div><pre>${esc(m.doc.body)}</pre></div>`); continue; }
+    const lbl = m.who==="pt" ? esc(first) : (p.staff==="GP"?"Doctor":"Nurse");
     tr.insertAdjacentHTML("beforeend", `<div class="msg ${m.who}"><div class="lbl">${lbl}${tag}</div>${esc(m.text)}</div>`);
+    if(m.who==="pt" && m.verdict) tr.insertAdjacentHTML("beforeend", `<div class="verdict">${T_("Patient's view","Părerea pacientului")}: ${esc(m.verdict)}</div>`);
   }
-  if(p.thinking) tr.insertAdjacentHTML("beforeend", `<div class="msg pt think"><div class="lbl">${esc(p.sc.name.split(" ")[0])}</div>thinking about your answer…</div>`);
+  if(p.thinking) tr.insertAdjacentHTML("beforeend", `<div class="msg pt think"><div class="lbl">${esc(first)}</div>${T_("thinking about your answer…","se gândește la răspunsul tău…")}</div>`);
   el.appendChild(tr);
   if(lastError) el.insertAdjacentHTML("beforeend", `<div class="err">${esc(lastError)}</div>`);
 
@@ -857,7 +1248,7 @@ function renderConsult(){
       </div>
       <div class="choices">
         <button class="btn gold" id="goManual" type="button">Answer manually<small>Type the reply yourself</small></button>
-        <button class="btn ai" id="goAI" type="button">Use AI<small>Prompt Gemini for a reply</small></button>
+        <button class="btn ai" id="goAI" type="button">Use AI<small>${live()?"Prompt Gemini":"Offline demo drafts"}</small></button>
         <button class="btn" id="goPostpone" type="button">Postpone<small>Back to the bench</small></button>
       </div>`);
     el.querySelectorAll("[data-staff]").forEach(b=>b.addEventListener("click",()=>{ pendingStaff=b.dataset.staff; renderConsult(); }));
@@ -870,44 +1261,48 @@ function renderConsult(){
         <button class="chip ${mode==="manual"?"on":""}" data-mode="manual" type="button">Answer manually</button>
         <button class="chip ai ${mode==="ai"?"on":""}" data-mode="ai" type="button">Use AI</button></div>`;
     if(mode==="ai"){
-      comp += `<label for="aiPrompt">Tell the AI assistant what you want
-          <textarea id="aiPrompt" placeholder="e.g. Reassure her, renew the prescription and book a blood pressure check" ${dis}>${esc(aiPromptText)}</textarea></label>
-        <div class="quick">
-          <button class="chip" data-q="Draft the best next reply." type="button" ${dis}>Draft the best reply</button>
-          <button class="chip" data-q="Ask the patient the key questions you need answered before advising." type="button" ${dis}>Ask what I need to know</button>
-          <button class="chip" data-q="Explain the situation very simply and give clear next steps." type="button" ${dis}>Explain simply</button>
-        </div>
-        <div class="row"><button class="btn ai" id="genBtn" type="button" ${dis}>${busy?"Drafting…":"Ask Gemini"}</button>
-          <span class="note">${cfg.review ? "You'll review the draft before it's sent." : "The draft is sent straight to the patient."}</span></div>`;
+      const Q = cfg.lang==="ro"
+        ? [["Scrie cel mai bun răspuns","Scrie cel mai bun răspuns la ultimul mesaj al pacientului."],["Emite rețeta","Emite rețeta de care are nevoie pacientul, completă, și explică-i cum s-o folosească."],["Ce trebuie să aflu?","Pune pacientului întrebările-cheie de care am nevoie înainte să-l sfătuiesc."],["Explică simplu","Explică situația foarte simplu și dă pași următori clari."],["Semne de alarmă","Spune-i clar ce semne de alarmă înseamnă că trebuie să caute ajutor urgent."]]
+        : [["Draft the best reply","Write the best next reply to the patient's latest message."],["Issue the prescription","Issue the prescription this patient needs, fully written out, and explain how to take it."],["Ask what I need to know","Ask the patient the key questions you need answered before advising."],["Explain simply","Explain the situation very simply and give clear next steps."],["Safety-net","Tell the patient clearly which warning signs mean they must seek urgent help."]];
+      comp += `<label for="aiPrompt">${T_("Tell the AI assistant what to do","Spune-i asistentului AI ce să facă")}
+          <textarea id="aiPrompt" placeholder="${T_("e.g. Renew her amlodipine prescription and book a blood pressure check","ex. Reînnoiește rețeta de amlodipină și programează controlul tensiunii")}" ${dis}>${esc(aiPromptText)}</textarea></label>
+        <div class="quick">${Q.map(([l,q])=>`<button class="chip" data-q="${esc(q)}" type="button" ${dis}>${esc(l)}</button>`).join("")}</div>
+        <div class="row"><button class="btn ai" id="genBtn" type="button" ${dis}>${busy?T_("Drafting…","Se redactează…"):(live()?T_("Ask Gemini","Întreabă Gemini"):T_("Draft (offline demo)","Redactează (demo offline)"))}</button>
+          <span class="note">${cfg.review ? T_("You'll review the draft before it's sent.","Verifici textul înainte să fie trimis.") : T_("The draft is sent straight to the patient.","Textul ajunge direct la pacient.")}</span></div>`;
+      if(draftNotes) comp += `<div class="ainote"><b>${T_("Note for you","Notă pentru tine")}${draftSource==="offline"?" · offline":""}</b> ${esc(draftNotes)}</div>`;
     }
-    if(mode==="manual" || draftText){
-      comp += `<label for="reply"><span>${draftIsAI ? `AI draft · edit it if you like <span class="tag aitag">AI</span>` : "Your reply to the patient"}</span>
-          <textarea id="reply" class="${draftIsAI?"draft":""}" placeholder="Write what you'd say to ${esc(p.sc.name.split(" ")[0])}…" ${dis}>${esc(draftText)}</textarea></label>
-        <div class="row"><button class="btn gold" id="sendBtn" type="button" ${dis}>Send reply</button>${draftIsAI?`<button class="btn small ghost" id="discardBtn" type="button" ${dis}>Discard draft</button>`:""}</div>`;
+    if(mode==="manual" || draftText || draftDoc){
+      comp += `<label for="reply"><span>${draftIsAI ? `${T_("AI draft · edit it if you like","Text AI · îl poți edita")} <span class="tag aitag">${draftSource==="offline"?"offline":"AI"}</span>` : T_("Your reply to the patient","Răspunsul tău către pacient")}</span>
+          <textarea id="reply" class="${draftIsAI?"draft":""}" placeholder="${T_(`Write what you'd say to ${esc(first)}…`,`Scrie ce i-ai spune lui ${esc(first)}…`)}" ${dis}>${esc(draftText)}</textarea></label>`;
+      comp += docEditorHTML(dis);
+      comp += `<div class="row"><button class="btn gold" id="sendBtn" type="button" ${dis}>${T_("Send reply","Trimite")}</button>
+          ${!draftDoc?`<button class="btn small ghost" id="addDocBtn" type="button" ${dis}>${T_("Add a document","Adaugă un document")}</button>`:""}
+          ${draftIsAI?`<button class="btn small ghost" id="discardBtn" type="button" ${dis}>${T_("Discard draft","Renunță la text")}</button>`:""}</div>`;
     }
     comp += `<div class="row"><span class="spacer"></span>
         <button class="btn small ghost" id="postponeBtn" type="button" ${dis}>Postpone</button>
         <button class="btn small ghost" id="endBtn" type="button" ${dis}>End consultation</button></div>`;
     el.insertAdjacentHTML("beforeend", comp);
+    $("#needsToggle")?.addEventListener("click",()=>{ saveInputs(); showNeeds=!showNeeds; renderConsult(); });
     el.querySelectorAll("[data-mode]").forEach(b=>b.addEventListener("click",()=>{ saveInputs(); mode=b.dataset.mode; renderConsult(); }));
-    el.querySelectorAll("[data-q]").forEach(b=>b.addEventListener("click",()=>{ $("#aiPrompt").value=b.dataset.q; }));
+    el.querySelectorAll("[data-q]").forEach(b=>b.addEventListener("click",()=>{ $("#aiPrompt").value=b.dataset.q; aiPromptText=b.dataset.q; }));
     $("#genBtn")?.addEventListener("click",()=>runAI(p));
-    $("#sendBtn")?.addEventListener("click",()=>{ const v=$("#reply").value.trim(); if(!v){ $("#reply").focus(); return; } sendReply(p, v, draftIsAI); });
+    $("#addDocBtn")?.addEventListener("click",()=>{ saveInputs(); draftDoc={type:"prescription", title:docLabel("prescription"), body:""}; includeDoc=true; renderConsult(); $("#docBody")?.focus(); });
+    $("#sendBtn")?.addEventListener("click",()=>{ saveInputs(); const v=draftText.trim(); const d = draftDoc && includeDoc && draftDoc.body.trim() ? {...draftDoc} : null;
+      if(!v && !d){ $("#reply").focus(); return; } sendReply(p, v, draftIsAI, d, draftSource); });
     $("#reply")?.addEventListener("input",e=>{ draftText=e.target.value; });
     $("#reply")?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&(e.metaKey||e.ctrlKey)) $("#sendBtn").click(); });
     $("#aiPrompt")?.addEventListener("input",e=>{ aiPromptText=e.target.value; });
     $("#aiPrompt")?.addEventListener("keydown",e=>{ if(e.key==="Enter"&&(e.metaKey||e.ctrlKey)) $("#genBtn").click(); });
-    $("#discardBtn")?.addEventListener("click",()=>{ draftText=""; draftIsAI=false; renderConsult(); });
+    $("#discardBtn")?.addEventListener("click",()=>{ clearDraft(); renderConsult(); });
     $("#postponeBtn").addEventListener("click",()=>postpone(p));
-    $("#endBtn").addEventListener("click",()=>finish(p,"Discharged","You ended the consultation before they were fully satisfied."));
+    $("#endBtn").addEventListener("click",()=>finish(p,"Discharged",T_("You ended the consultation before they were fully satisfied.","Ai încheiat consultația înainte ca pacientul să fie mulțumit.")));
   }
   tr.scrollTop = tr.scrollHeight;
 }
-let draftText = "", aiPromptText = "";
-function saveInputs(){ const r=$("#reply"); if(r) draftText=r.value; const a=$("#aiPrompt"); if(a) aiPromptText=a.value; }
 
 function startConsult(p, m){
-  active = p; selected = p; mode = m; lastError=""; draftText=""; draftIsAI=false; aiPromptText="";
+  active = p; selected = p; mode = m; lastError=""; clearDraft(); aiPromptText="";
   p.staff = p.staff || pendingStaff;
   if(!p.start) p.start = performance.now();
   staffState[p.staff].busy = true;
@@ -927,40 +1322,47 @@ function postpone(p){
     p.convo.push({who:"sys", text:`Postponed at ${clockStr()}. They went back to the waiting room.`});
     active = null;
   }
-  selected = null; lastError=""; draftText=""; draftIsAI=false;
+  selected = null; lastError=""; clearDraft();
   renderQueue(); renderConsult();
 }
 async function runAI(p){
   saveInputs(); busy = true; lastError=""; staffState[p.staff].ai = true; renderConsult();
   try{
-    const txt = await aiDraft(p, aiPromptText.trim());
+    const res = await aiDraft(p, aiPromptText.trim());
     if(p!==active) return;
     p.aiUsed = true;
-    if(cfg.review){ draftText = txt; draftIsAI = true; }
-    else { busy=false; staffState[p.staff].ai=false; await sendReply(p, txt, true); return; }
+    draftText = res.reply; draftIsAI = true; draftDoc = res.document; draftNotes = res.notes; draftSource = res.source; includeDoc = true;
+    if(!cfg.review){ busy=false; staffState[p.staff].ai=false; await sendReply(p, res.reply, true, res.document, res.source); return; }
   } catch(e){ lastError = e.message; }
   busy = false; staffState[p.staff].ai = false; renderConsult();
 }
-async function sendReply(p, text, ai){
-  p.convo.push({who:"cl", text, ai});
+async function sendReply(p, text, ai, doc, src){
+  const added = [];
+  if(text){ p.convo.push({who:"cl", text, ai, src}); added.push(1); }
+  if(doc){ p.convo.push({who:"doc", doc, ai, src}); added.push(1); }
   if(ai){ p.aiUsed=true; stats.aiReplies++; } else { p.manualUsed=true; stats.manualReplies++; }
-  draftText=""; draftIsAI=false; aiPromptText=""; lastError="";
+  const backup = {text, ai, doc, src};
+  clearDraft(); aiPromptText=""; lastError="";
   p.thinking = true; renderConsult();
   try{
     const res = await patientReact(p);
     p.thinking = false;
-    p.convo.push({who:"pt", text:res.reply});
+    for(const id of res.met) p.met.add(id);
+    p.convo.push({who:"pt", text:res.reply, verdict:res.verdict});
     p.mood = res.mood; p.lastVerdict = res.verdict;
-    if(res.satisfied){ finish(p, "Satisfied", res.verdict); return; }
-    const turns = p.convo.filter(m=>m.who==="cl").length;
-    if(turns >= 6){ finish(p, "Gave up", res.verdict || "Too many rounds without a clear answer."); return; }
-    p.icon = res.mood==="annoyed" ? "angry" : null; p.iconT = 2.5;
+    const allReq = p.sc.needs.filter(n=>n.req).every(n=>p.met.has(n.id));
+    if(allReq){ finish(p, "Satisfied", res.verdict); return; }
+    const turns = p.convo.filter(m=>m.who==="cl"||m.who==="doc").length;
+    if(turns >= 8){ finish(p, "Gave up", res.verdict || "Too many rounds without a clear answer."); return; }
+    p.icon = ["happy","calm","worried","annoyed"].includes(res.mood) ? res.mood : "calm"; p.iconT = 3;
   } catch(e){
     p.thinking = false; lastError = e.message;
-    p.convo.pop(); draftText = text; draftIsAI = ai;   // let them retry
+    p.convo.splice(p.convo.length - added.length, added.length);   // let them retry
+    draftText = backup.text; draftIsAI = backup.ai; draftDoc = backup.doc; draftSource = backup.src || "";
   }
   renderConsult();
 }
+
 function finish(p, outcome, verdict){
   const dur = p.consultTime;
   const method = p.aiUsed && p.manualUsed ? "Mixed" : p.aiUsed ? "AI-assisted" : "Manual";
@@ -969,6 +1371,8 @@ function finish(p, outcome, verdict){
   addLog(p, outcome, verdict, method, dur);
   staffState[p.staff].busy=false; staffState[p.staff].ai=false;
   p.icon = outcome==="Satisfied" ? "heart" : "angry"; p.iconT = 6;
+  p.mood = outcome==="Satisfied" ? "happy" : "annoyed";
+  addEffect(p.gx,p.gy, outcome==="Satisfied" ? "+1 HAPPY" : outcome==="Discharged" ? "NOT SURE" : "GAVE UP", outcome==="Satisfied" ? "#5cc98a" : "#f0a03a");
   setPath(p, pathRoomToDoor(p.staff), "leaving");
   summary = { name:p.sc.name, outcome, verdict, method, dur, replies:p.convo.filter(m=>m.who==="cl").length, staff:p.staff };
   active = null; selected = null; busy=false;
@@ -993,7 +1397,7 @@ function addLog(p, outcome, verdict, method="–", dur=null){
 }
 
 /* ================= Settings ================= */
-function openSettings(){ $("#settings").hidden=false; $("#apiKey").value=cfg.key; $("#review").checked=cfg.review; $("#pace").value=cfg.pace;
+function openSettings(){ $("#settings").hidden=false; $("#apiKey").value=cfg.key; $("#review").checked=cfg.review; $("#pace").value=cfg.pace; $("#lang").value=cfg.lang;
   $("#startBtn").textContent = started ? "Back to the surgery" : "Open the doors"; wasPaused = paused; paused = true; keyStateMsg(); }
 let wasPaused = false;
 function keyStateMsg(){ const k=$("#apiKey").value.trim();
@@ -1013,8 +1417,20 @@ $("#loadModels").addEventListener("click", async ()=>{
     $("#keyState").textContent=`Key works. ${names.length} models available; a fast Flash model is usually the best fit.`;
   } catch(e){ $("#keyState").textContent = `Couldn't load models: ${e.message}`; }
 });
+function applySettings(){ cfg.key=$("#apiKey").value.trim(); cfg.model=$("#model").value; cfg.review=$("#review").checked; cfg.pace=$("#pace").value; cfg.lang=$("#lang").value; updateModePill(); }
+function updateModePill(){ const b=$("#modePill"); b.textContent = live() ? `AI: Gemini · ${cfg.model}` : "AI: offline demo"; b.className = "btn small pill " + (live()?"on":"off"); }
+["#model","#review","#pace","#lang"].forEach(sel=>$(sel).addEventListener("change",applySettings));
+$("#apiKey").addEventListener("input",applySettings);
+$("#modePill").addEventListener("click", openSettings);
+$("#testKey").addEventListener("click", async ()=>{
+  applySettings(); if(!cfg.key){ $("#keyState").textContent="Paste your API key first."; return; }
+  $("#keyState").textContent=`Testing ${cfg.model}…`; const t0=performance.now();
+  try{ const out = await gemini("You are a connection test. Reply with exactly the word OK.","ping",false);
+    $("#keyState").textContent=`It works: ${cfg.model} replied "${out.slice(0,24)}" in ${Math.round(performance.now()-t0)} ms. Patients and AI drafts will use Gemini.`; }
+  catch(e){ $("#keyState").textContent = e.message; }
+});
 $("#startBtn").addEventListener("click", ()=>{
-  cfg.key=$("#apiKey").value.trim(); cfg.model=$("#model").value; cfg.review=$("#review").checked; cfg.pace=$("#pace").value;
+  applySettings();
   $("#settings").hidden=true;
   if(!started){ started=true; paused=false; spawn(); setTimeout(()=>spawn(),2500); setTimeout(()=>spawn(),6000); spawnTimer = PACE[cfg.pace]; renderQueue(); renderConsult(); }
   else paused = wasPaused;
@@ -1024,7 +1440,7 @@ $("#settingsBtn").addEventListener("click", openSettings);
 $("#pauseBtn").addEventListener("click", ()=>{ if(!started) return; paused=!paused; $("#pauseBtn").textContent = paused?"Resume":"Pause"; });
 $("#spawnBtn").addEventListener("click", ()=>{ if(!started) return; if(!spawn()) hint("The waiting room is full"); });
 
-renderStats(); renderQueue(); renderConsult();
+renderStats(); renderQueue(); renderConsult(); updateModePill();
 requestAnimationFrame(frame);
 </script>
 </body>
